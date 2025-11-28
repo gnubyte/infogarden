@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Password Entry - InfoGarden{% endblock %}
+
+{% block content %}
+<h1>Edit Password Entry</h1>
+
+<div class="row mt-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" id="password-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Title *</label>
+                        <input type="text" class="form-control" id="title" name="title" value="{{ entry.title }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="link" class="form-label">Link</label>
+                        <input type="url" class="form-control" id="link" name="link" value="{{ entry.link or '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" value="{{ entry.username or '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" value="{{ entry.email or '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password (leave blank to keep current)</label>
+                        <input type="password" class="form-control" id="password" name="password" placeholder="Enter new password or leave blank">
+                    </div>
+                    <div class="mb-3">
+                        <label for="two_fa_secret" class="form-label">2FA Secret Key (leave blank to keep current)</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="two_fa_secret" name="two_fa_secret" placeholder="Enter new secret or leave blank">
+                            <button type="button" class="btn btn-outline-secondary" id="parse-qr-btn">Parse QR Code</button>
+                        </div>
+                        <input type="file" id="qr-file" accept="image/*" style="display: none;">
+                        <small class="form-text text-muted">Enter the secret key manually or upload a QR code image</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Update</button>
+                    <a href="{{ url_for('passwords.index') }}" class="btn btn-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    document.getElementById('parse-qr-btn').addEventListener('click', function() {
+        document.getElementById('qr-file').click();
+    });
+    
+    document.getElementById('qr-file').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const formData = new FormData();
+        formData.append('image', file);
+        // Get CSRF token from the form
+        const csrfToken = document.querySelector('input[name="csrf_token"]');
+        if (csrfToken) {
+            formData.append('csrf_token', csrfToken.value);
+        }
+        
+        fetch('{{ url_for("passwords.parse_qr") }}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.secret) {
+                document.getElementById('two_fa_secret').value = data.secret;
+                alert('QR code parsed successfully!');
+            } else {
+                alert('Error: ' + (data.error || 'Could not parse QR code'));
+            }
+        })
+        .catch(error => {
+            alert('Error parsing QR code: ' + error);
+        });
+    });
+</script>
+{% endblock %}
+{% endblock %}
+

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}User Activity - InfoGarden{% endblock %}
+
+{% block content %}
+<h1>Activity Log: {{ user.username }}</h1>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Action</th>
+                            <th>Resource Type</th>
+                            <th>Resource ID</th>
+                            <th>IP Address</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                        <tr>
+                            <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else '-' }}</td>
+                            <td>{{ log.action_type }}</td>
+                            <td>{{ log.resource_type }}</td>
+                            <td>{{ log.resource_id or '-' }}</td>
+                            <td>{{ log.ip_address or '-' }}</td>
+                            <td>{{ log.details|tojson if log.details else '-' }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center">No activity logs found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <a href="{{ url_for('users.index') }}" class="btn btn-secondary mt-3">Back to Users</a>
+    </div>
+</div>
+{% endblock %}
+

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}InfoGarden{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        .navbar-search {
+            max-width: 400px;
+        }
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 0.375rem;
+            max-height: 400px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+        .search-result-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+        .search-result-item:hover {
+            background-color: #f8f9fa;
+        }
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+        .sidebar {
+            width: 280px;
+            min-height: calc(100vh - 76px);
+            background-color: #f8f9fa;
+            border-right: 1px solid #dee2e6;
+            padding: 1rem;
+            position: sticky;
+            top: 76px;
+            overflow-y: auto;
+            max-height: calc(100vh - 76px);
+        }
+        .sidebar-section {
+            margin-bottom: 1.5rem;
+        }
+        .sidebar-section-title {
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            color: #6c757d;
+            margin-bottom: 0.5rem;
+            padding: 0.25rem 0;
+        }
+        .sidebar-tree {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+        }
+        .sidebar-tree-item {
+            padding: 0.25rem 0;
+        }
+        .sidebar-tree-link {
+            display: block;
+            padding: 0.375rem 0.5rem;
+            color: #212529;
+            text-decoration: none;
+            border-radius: 0.25rem;
+            font-size: 0.9rem;
+        }
+        .sidebar-tree-link:hover {
+            background-color: #e9ecef;
+            color: #0d6efd;
+        }
+        .sidebar-tree-link.active {
+            background-color: #0d6efd;
+            color: white;
+        }
+        .sidebar-tree-toggle {
+            cursor: pointer;
+            user-select: none;
+        }
+        .sidebar-tree-children {
+            padding-left: 1rem;
+            display: none;
+        }
+        .sidebar-tree-children.expanded {
+            display: block;
+        }
+        .sidebar-tree-icon {
+            display: inline-block;
+            width: 16px;
+            text-align: center;
+            margin-right: 4px;
+        }
+        .content-with-sidebar {
+            display: flex;
+            overflow-x: auto;
+            min-width: 0; /* Allow flex items to shrink below content size */
+        }
+        .main-content {
+            flex: 1;
+            padding: 1rem;
+            min-width: 0; /* Allow content to shrink */
+            overflow-x: auto; /* Enable horizontal scrolling for wide content */
+        }
+        .markdown-content {
+            overflow-x: auto; /* Enable horizontal scrolling for markdown content */
+        }
+        .markdown-content img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 1rem 0;
+        }
+        .markdown-content .youtube-embed {
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 aspect ratio */
+            height: 0;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+        .markdown-content .youtube-embed iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .right-sidebar {
+            width: 250px;
+            min-width: 250px; /* Prevent sidebar from shrinking */
+            min-height: calc(100vh - 76px);
+            background-color: #f8f9fa;
+            border-left: 1px solid #dee2e6;
+            padding: 1rem;
+            position: sticky;
+            top: 76px;
+            overflow-y: auto;
+            max-height: calc(100vh - 76px);
+        }
+        .right-sidebar .btn {
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+        .content-with-both-sidebars {
+            display: flex;
+            overflow-x: auto;
+            min-width: 0;
+        }
+        .content-with-both-sidebars .main-content {
+            flex: 1;
+            padding: 1rem;
+            min-width: 0;
+            overflow-x: auto;
+        }
+        .sidebar {
+            min-width: 280px; /* Prevent sidebar from shrinking */
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('core_auth.dashboard') }}">InfoGarden</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                {% if current_user.is_authenticated %}
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('core_auth.dashboard') }}">Dashboard</a>
+                    </li>
+                    {% if current_user.is_global_admin() %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('orgs.index') }}">Organizations</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('users.index') }}">Users</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('core_auth.settings') }}">Settings</a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('docs.index') }}">Documents</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('contacts.index') }}">Contacts</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('passwords.index') }}">Passwords</a>
+                    </li>
+                </ul>
+                <div class="navbar-search position-relative me-3">
+                    <input type="text" class="form-control" id="global-search" placeholder="Search..." autocomplete="off">
+                    <div class="search-results" id="search-results"></div>
+                </div>
+                {% if current_user.is_authenticated %}
+                <div class="navbar-org-selector position-relative me-3">
+                    <div class="dropdown">
+                        <button class="btn btn-outline-light dropdown-toggle" type="button" id="orgDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-building"></i> 
+                            <span id="current-org-name">{{ current_org.name if current_org else 'No Organization' }}</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" id="org-dropdown-menu" style="min-width: 300px; max-height: 400px; overflow-y: auto;">
+                            <li>
+                                <div class="px-3 py-2">
+                                    <input type="text" class="form-control form-control-sm" id="org-search" placeholder="Search organizations (3+ chars)..." autocomplete="off">
+                                </div>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li id="org-results">
+                                <div class="px-3 py-2 text-muted text-center">Start typing to search...</div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                {% endif %}
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                            {{ current_user.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            {% if current_user.is_global_admin() %}
+                            <li><a class="dropdown-item" href="{{ url_for('core_auth.settings') }}">Settings</a></li>
+                            {% endif %}
+                            <li><a class="dropdown-item" href="{{ url_for('core_auth.logout') }}">Logout</a></li>
+                        </ul>
+                    </li>
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+    <script>
+        // Global search functionality
+        const searchInput = document.getElementById('global-search');
+        const searchResults = document.getElementById('search-results');
+        let searchTimeout;
+
+        if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                const query = this.value.trim();
+                
+                if (query.length < 2) {
+                    searchResults.style.display = 'none';
+                    return;
+                }
+                
+                searchTimeout = setTimeout(() => {
+                    fetch(`{{ url_for('search.search') }}?q=${encodeURIComponent(query)}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.results && data.results.length > 0) {
+                                let html = '';
+                                data.results.forEach(result => {
+                                    html += `<div class="search-result-item" onclick="window.location.href='${result.url}'">
+                                        <strong>${result.title}</strong> (${result.type})
+                                        <br><small class="text-muted">${result.snippet}</small>
+                                    </div>`;
+                                });
+                                searchResults.innerHTML = html;
+                                searchResults.style.display = 'block';
+                            } else {
+                                searchResults.innerHTML = '<div class="search-result-item text-muted">No results found</div>';
+                                searchResults.style.display = 'block';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Search error:', error);
+                        });
+                }, 300);
+            });
+            
+            // Hide results when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                    searchResults.style.display = 'none';
+                }
+            });
+        }
+        
+        // Organization selector functionality
+        const orgSearchInput = document.getElementById('org-search');
+        const orgResults = document.getElementById('org-results');
+        const currentOrgName = document.getElementById('current-org-name');
+        let orgSearchTimeout;
+        
+        if (orgSearchInput) {
+            orgSearchInput.addEventListener('input', function() {
+                clearTimeout(orgSearchTimeout);
+                const query = this.value.trim();
+                
+                if (query.length < 3) {
+                    orgResults.innerHTML = '<div class="px-3 py-2 text-muted text-center">Type at least 3 characters to search...</div>';
+                    return;
+                }
+                
+                orgSearchTimeout = setTimeout(() => {
+                    fetch(`{{ url_for('orgs.search') }}?q=${encodeURIComponent(query)}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.results && data.results.length > 0) {
+                                let html = '';
+                                data.results.forEach(org => {
+                                    html += `<li>
+                                        <a class="dropdown-item org-select-item" href="#" data-org-id="${org.id}" data-org-name="${org.name}">
+                                            ${org.name}
+                                        </a>
+                                    </li>`;
+                                });
+                                orgResults.innerHTML = html;
+                            } else {
+                                orgResults.innerHTML = '<div class="px-3 py-2 text-muted text-center">No organizations found</div>';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Organization search error:', error);
+                            orgResults.innerHTML = '<div class="px-3 py-2 text-danger text-center">Error searching organizations</div>';
+                        });
+                }, 300);
+            });
+            
+            // Handle organization selection
+            document.addEventListener('click', function(e) {
+                if (e.target.classList.contains('org-select-item')) {
+                    e.preventDefault();
+                    const orgId = e.target.getAttribute('data-org-id');
+                    const orgName = e.target.getAttribute('data-org-name');
+                    
+                    const formData = new FormData();
+                    formData.append('org_id', orgId);
+                    formData.append('csrf_token', '{{ csrf_token() }}');
+                    
+                    fetch('{{ url_for("orgs.switch_post") }}', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            currentOrgName.textContent = data.org_name;
+                            // Close dropdown
+                            const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('orgDropdown'));
+                            if (dropdown) {
+                                dropdown.hide();
+                            }
+                            // Reload page to update context
+                            window.location.reload();
+                        } else {
+                            alert('Error: ' + (data.error || 'Failed to switch organization'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error switching organization:', error);
+                        alert('Error switching organization');
+                    });
+                }
+            });
+        }
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
+

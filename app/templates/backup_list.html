@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Backups - InfoGarden{% endblock %}
+
+{% block content %}
+<h1>Database Backups</h1>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Filename</th>
+                            <th>Size</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for backup in backups %}
+                        <tr>
+                            <td>{{ backup.filename }}</td>
+                            <td>{{ "%.2f"|format(backup.size / 1024 / 1024) }} MB</td>
+                            <td>{{ backup.created.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>
+                                <a href="{{ url_for('core_auth.backup_download', filename=backup.filename) }}" class="btn btn-sm btn-primary">Download</a>
+                                <form method="POST" action="{{ url_for('core_auth.backup_restore', filename=backup.filename) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to restore this backup? This will overwrite the current database.');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-warning">Restore</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center">No backups found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <a href="{{ url_for('core_auth.settings') }}" class="btn btn-secondary mt-3">Back to Settings</a>
+    </div>
+</div>
+{% endblock %}
+

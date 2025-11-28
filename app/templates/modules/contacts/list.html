@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% from "components/sidebar.html" import render_sidebar %}
+
+{% block title %}Contacts - InfoGarden{% endblock %}
+
+{% block content %}
+<div class="content-with-sidebar">
+    {{ render_sidebar(doc_tree, passwords, contacts, 'contact', None) }}
+    <div class="main-content">
+        <h1>Contacts</h1>
+
+        <div class="row mt-4">
+            <div class="col-12">
+        <a href="{{ url_for('contacts.create') }}" class="btn btn-primary mb-3">Create Contact</a>
+        <div class="btn-group mb-3" role="group">
+            <a href="{{ url_for('contacts.index') }}" class="btn btn-outline-secondary {{ 'active' if not emergency_only else '' }}">All</a>
+            <a href="{{ url_for('contacts.index', emergency='true') }}" class="btn btn-outline-secondary {{ 'active' if emergency_only else '' }}">Emergency Only</a>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Role</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Emergency</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for contact in contacts %}
+                        <tr>
+                            <td>{{ contact.name }}</td>
+                            <td>{{ contact.role or '-' }}</td>
+                            <td>{{ contact.email or '-' }}</td>
+                            <td>{{ contact.phone or '-' }}</td>
+                            <td>
+                                {% if contact.emergency_contact %}
+                                <span class="badge bg-danger">Yes</span>
+                                {% else %}
+                                <span class="badge bg-secondary">No</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('contacts.edit', contact_id=contact.id) }}" class="btn btn-sm btn-primary">Edit</a>
+                                <form method="POST" action="{{ url_for('contacts.delete', contact_id=contact.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center">No contacts found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

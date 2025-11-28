@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - InfoGarden{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1>Dashboard</h1>
+        {% if org %}
+        <div class="alert alert-info">
+            <strong>Current Organization:</strong> {{ org.name }}
+            {% if org.description %}
+            <br>{{ org.description }}
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="alert alert-warning">
+            No organization selected. Please select an organization to continue.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Documents</h5>
+                <p class="card-text">Manage documentation and wiki pages</p>
+                <a href="{{ url_for('docs.index') }}" class="btn btn-primary">View Documents</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Contacts</h5>
+                <p class="card-text">Manage organization contacts</p>
+                <a href="{{ url_for('contacts.index') }}" class="btn btn-primary">View Contacts</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Passwords</h5>
+                <p class="card-text">Manage encrypted passwords</p>
+                <a href="{{ url_for('passwords.index') }}" class="btn btn-primary">View Passwords</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

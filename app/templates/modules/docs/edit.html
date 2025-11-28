@@ -1,0 +1,402 @@
+{% extends "base.html" %}
+{% from "components/sidebar.html" import render_sidebar %}
+
+{% block title %}Edit Document - InfoGarden{% endblock %}
+
+{% block content %}
+<div class="content-with-sidebar">
+    {{ render_sidebar(doc_tree, passwords, contacts, 'doc', doc.id) }}
+    <div class="main-content">
+        <h1>Edit Document</h1>
+
+        <div class="row mt-4">
+            <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" id="doc-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Title *</label>
+                        <input type="text" class="form-control" id="title" name="title" value="{{ doc.title }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="content" class="form-label">Content (Markdown)</label>
+                        <textarea class="form-control" id="content" name="content" rows="20">{{ doc.content or '' }}</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Update</button>
+                    <a href="{{ url_for('docs.view', doc_id=doc.id) }}" class="btn btn-secondary">Cancel</a>
+                </form>
+            </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Wait for EasyMDE to load
+    function initEasyMDE() {
+        if (typeof EasyMDE !== 'undefined') {
+            const easyMDE = new EasyMDE({
+                element: document.getElementById('content'),
+                spellChecker: false,
+                uploadImage: true,
+                imageUploadEndpoint: '{{ url_for("docs.upload_image") }}',
+                previewClass: ['editor-preview', 'markdown-body'],
+                imageTexts: {
+                    sbInit: 'Drag and drop an image here, or click to select',
+                    sbOnDragEnter: 'Drop the image here',
+                    sbOnDrop: 'Uploading...',
+                    sbProgress: 'Uploading {#imageName#}... {#imageProgress#}%',
+                    sbOnUploaded: 'Image uploaded successfully'
+                },
+                imageUploadFunction: function(file, onSuccess, onError) {
+                    const formData = new FormData();
+                    formData.append('image', file);
+                    // Get CSRF token from the form
+                    const csrfToken = document.querySelector('input[name="csrf_token"]');
+                    if (csrfToken) {
+                        formData.append('csrf_token', csrfToken.value);
+                    }
+                    
+                    fetch('{{ url_for("docs.upload_image") }}', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            return response.text().then(text => {
+                                throw new Error(`Server error: ${response.status} ${response.statusText}`);
+                            });
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.url) {
+                            // EasyMDE will format this as ![filename](url) automatically
+                            onSuccess(data.url);
+                        } else {
+                            onError(data.error || 'Upload failed');
+                        }
+                    })
+                    .catch(error => {
+                        onError('Upload failed: ' + error.message);
+                    });
+                },
+                toolbar: [
+                    'bold', 'italic', 'strikethrough', '|',
+                    'heading-1', 'heading-2', 'heading-3', '|',
+                    'code', 'quote', 'unordered-list', 'ordered-list', '|',
+                    'link', 'image', 'table', '|',
+                    'preview', 'side-by-side', 'fullscreen', '|',
+                    'guide'
+                ]
+            });
+            
+            // Enable image resize functionality
+            function setupImageResize() {
+                const previewContainer = document.querySelector('.editor-preview, .editor-preview-side');
+                if (!previewContainer) return;
+                
+                // Remove existing listeners
+                previewContainer.querySelectorAll('img').forEach(img => {
+                    img.style.cursor = 'pointer';
+                    img.title = 'Click to resize image';
+                    img.onclick = null; // Remove old handlers
+                    img.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openImageResizeDialog(img, easyMDE);
+                    });
+                });
+            }
+            
+            // Setup image resize when preview updates
+            easyMDE.codemirror.on('update', function() {
+                setTimeout(setupImageResize, 100);
+            });
+            
+            // Also setup on preview toggle
+            const originalPreview = easyMDE.togglePreview;
+            easyMDE.togglePreview = function() {
+                originalPreview.call(this);
+                setTimeout(setupImageResize, 100);
+            };
+            
+            const originalSideBySide = easyMDE.toggleSideBySide;
+            easyMDE.toggleSideBySide = function() {
+                originalSideBySide.call(this);
+                setTimeout(setupImageResize, 100);
+            };
+            
+            // Initial setup
+            setTimeout(setupImageResize, 500);
+        } else {
+            setTimeout(initEasyMDE, 100);
+        }
+    }
+    initEasyMDE();
+    
+    // Image resize dialog function
+    function openImageResizeDialog(imgElement, easyMDE) {
+        const src = imgElement.src;
+        const currentWidth = imgElement.width || imgElement.naturalWidth;
+        const currentHeight = imgElement.height || imgElement.naturalHeight;
+        const naturalWidth = imgElement.naturalWidth;
+        const naturalHeight = imgElement.naturalHeight;
+        
+        // Create modal
+        const modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.innerHTML = `
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Resize Image</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3 text-center">
+                            <img id="resize-preview-img" src="${src}" style="max-width: 100%; max-height: 300px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="resize-width" class="form-label">Width</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="resize-width" value="${currentWidth}" min="1">
+                                    <select class="form-select" id="resize-width-unit" style="max-width: 80px;">
+                                        <option value="px">px</option>
+                                        <option value="%">%</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="resize-height" class="form-label">Height</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="resize-height" value="${currentHeight}" min="1">
+                                    <select class="form-select" id="resize-height-unit" style="max-width: 80px;">
+                                        <option value="px">px</option>
+                                        <option value="%">%</option>
+                                        <option value="auto">auto</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="resize-maintain-aspect" checked>
+                                <label class="form-check-label" for="resize-maintain-aspect">
+                                    Maintain aspect ratio
+                                </label>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <small class="text-muted">Original size: ${naturalWidth} × ${naturalHeight}px</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="resize-apply-btn">Apply</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+        
+        const widthInput = modal.querySelector('#resize-width');
+        const heightInput = modal.querySelector('#resize-height');
+        const widthUnit = modal.querySelector('#resize-width-unit');
+        const heightUnit = modal.querySelector('#resize-height-unit');
+        const maintainAspect = modal.querySelector('#resize-maintain-aspect');
+        const previewImg = modal.querySelector('#resize-preview-img');
+        const applyBtn = modal.querySelector('#resize-apply-btn');
+        
+        // Update preview on input change
+        function updatePreview() {
+            const width = widthInput.value;
+            const widthUnitVal = widthUnit.value;
+            const height = heightInput.value;
+            const heightUnitVal = heightUnit.value;
+            
+            if (widthUnitVal === 'px') {
+                previewImg.style.width = width + 'px';
+            } else {
+                previewImg.style.width = width + '%';
+            }
+            
+            if (heightUnitVal === 'auto') {
+                previewImg.style.height = 'auto';
+            } else if (heightUnitVal === 'px') {
+                previewImg.style.height = height + 'px';
+            } else {
+                previewImg.style.height = height + '%';
+            }
+        }
+        
+        // Maintain aspect ratio
+        let lastChanged = 'width';
+        widthInput.addEventListener('input', function() {
+            if (maintainAspect.checked && widthUnit.value === 'px' && heightUnit.value === 'px') {
+                const ratio = naturalHeight / naturalWidth;
+                heightInput.value = Math.round(widthInput.value * ratio);
+            }
+            lastChanged = 'width';
+            updatePreview();
+        });
+        
+        heightInput.addEventListener('input', function() {
+            if (maintainAspect.checked && widthUnit.value === 'px' && heightUnit.value === 'px') {
+                const ratio = naturalWidth / naturalHeight;
+                widthInput.value = Math.round(heightInput.value * ratio);
+            }
+            lastChanged = 'height';
+            updatePreview();
+        });
+        
+        widthUnit.addEventListener('change', updatePreview);
+        heightUnit.addEventListener('change', updatePreview);
+        maintainAspect.addEventListener('change', function() {
+            if (this.checked && widthUnit.value === 'px' && heightUnit.value === 'px') {
+                const ratio = naturalHeight / naturalWidth;
+                heightInput.value = Math.round(widthInput.value * ratio);
+            }
+            updatePreview();
+        });
+        
+        // Apply resize
+        applyBtn.addEventListener('click', function() {
+            const width = widthInput.value;
+            const widthUnitVal = widthUnit.value;
+            const height = heightInput.value;
+            const heightUnitVal = heightUnit.value;
+            
+            // Build the HTML img tag with attributes
+            let imgTag = '<img src="' + src + '"';
+            let styleParts = [];
+            let hasWidthAttr = false;
+            let hasHeightAttr = false;
+            
+            // Handle width
+            if (widthUnitVal === 'px') {
+                imgTag += ' width="' + width + '"';
+                hasWidthAttr = true;
+            } else {
+                styleParts.push('width: ' + width + '%');
+            }
+            
+            // Handle height
+            if (heightUnitVal === 'px') {
+                imgTag += ' height="' + height + '"';
+                hasHeightAttr = true;
+            } else if (heightUnitVal === '%') {
+                styleParts.push('height: ' + height + '%');
+            } else if (heightUnitVal === 'auto') {
+                styleParts.push('height: auto');
+            }
+            
+            // Add style attribute if needed
+            if (styleParts.length > 0) {
+                imgTag += ' style="' + styleParts.join('; ') + '"';
+            }
+            
+            imgTag += '>';
+            
+            // Find and replace the image in markdown
+            const content = easyMDE.value();
+            const lines = content.split('\n');
+            
+            // Extract filename from src
+            const srcFilename = src.split('/').pop();
+            const srcPath = src;
+            
+            // Find the line with the image
+            let found = false;
+            for (let i = 0; i < lines.length; i++) {
+                // Check for markdown image syntax ![alt](url)
+                const mdImageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+                let match;
+                while ((match = mdImageRegex.exec(lines[i])) !== null) {
+                    const url = match[2];
+                    // Match by filename or full path
+                    if (url.includes(srcFilename) || url === srcPath || srcPath.includes(url)) {
+                        lines[i] = lines[i].replace(match[0], imgTag);
+                        found = true;
+                        break;
+                    }
+                }
+                if (found) break;
+                
+                // Check for HTML img tag
+                const htmlImgRegex = /<img[^>]+src="([^"]+)"[^>]*>/g;
+                while ((match = htmlImgRegex.exec(lines[i])) !== null) {
+                    const url = match[1];
+                    // Match by filename or full path
+                    if (url.includes(srcFilename) || url === srcPath || srcPath.includes(url)) {
+                        lines[i] = lines[i].replace(match[0], imgTag);
+                        found = true;
+                        break;
+                    }
+                }
+                if (found) break;
+            }
+            
+            if (found) {
+                easyMDE.value(lines.join('\n'));
+                bsModal.hide();
+                setTimeout(() => {
+                    document.body.removeChild(modal);
+                    setupImageResize();
+                }, 300);
+            } else {
+                alert('Could not find image in markdown. Please update manually.');
+            }
+        });
+        
+        // Clean up on close
+        modal.addEventListener('hidden.bs.modal', function() {
+            document.body.removeChild(modal);
+        });
+        
+        updatePreview();
+    }
+</script>
+<style>
+    /* EasyMDE preview styling for images */
+    .editor-preview img,
+    .editor-preview-side img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin: 1rem auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: opacity 0.2s;
+    }
+    .editor-preview img:hover,
+    .editor-preview-side img:hover {
+        opacity: 0.8;
+        border-color: #007bff;
+    }
+    .editor-preview .youtube-embed,
+    .editor-preview-side .youtube-embed {
+        position: relative;
+        padding-bottom: 56.25%;
+        height: 0;
+        overflow: hidden;
+        margin: 1rem 0;
+    }
+    .editor-preview .youtube-embed iframe,
+    .editor-preview-side .youtube-embed iframe {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+    }
+</style>
+{% endblock %}
+

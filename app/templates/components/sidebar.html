@@ -1,0 +1,162 @@
+{% macro render_tree_node(node, level, current_page, current_id) %}
+    {% for key, value in node.items() %}
+        {% if key == '_docs' %}
+            {% for doc in value %}
+                <li class="sidebar-tree-item">
+                    <a href="{{ url_for('docs.view', doc_id=doc.id) }}" 
+                       class="sidebar-tree-link {{ 'active' if current_page == 'doc' and current_id == doc.id else '' }}"
+                       style="padding-left: {{ (level + 1) * 0.75 }}rem;">
+                        <span class="sidebar-tree-icon">📄</span>
+                        {{ doc.title.split('/')[-1] }}
+                    </a>
+                </li>
+            {% endfor %}
+        {% elif key != '_children' %}
+            <li class="sidebar-tree-item">
+                <div class="sidebar-tree-toggle sidebar-tree-link" 
+                     onclick="toggleTreeSection(this)"
+                     style="padding-left: {{ level * 0.75 }}rem;">
+                    <span class="sidebar-tree-icon tree-icon">▶</span>
+                    <strong>{{ key }}</strong>
+                </div>
+                <ul class="sidebar-tree-children" style="display: none;">
+                    {% if '_children' in value %}
+                        {{ render_tree_node(value['_children'], level + 1, current_page, current_id) }}
+                    {% endif %}
+                    {% if '_docs' in value %}
+                        {% for doc in value['_docs'] %}
+                            <li class="sidebar-tree-item">
+                                <a href="{{ url_for('docs.view', doc_id=doc.id) }}" 
+                                   class="sidebar-tree-link {{ 'active' if current_page == 'doc' and current_id == doc.id else '' }}"
+                                   style="padding-left: {{ (level + 1) * 0.75 }}rem;">
+                                    <span class="sidebar-tree-icon">📄</span>
+                                    {{ doc.title.split('/')[-1] }}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    {% endif %}
+                </ul>
+            </li>
+        {% endif %}
+    {% endfor %}
+{% endmacro %}
+
+{% macro render_sidebar(doc_tree, passwords, contacts, current_page, current_id) %}
+<div class="sidebar">
+    {% if doc_tree %}
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">
+            <i class="bi bi-file-text"></i> Documents
+        </div>
+        <ul class="sidebar-tree" id="docs-tree">
+            {{ render_tree_node(doc_tree, 0, current_page, current_id) }}
+        </ul>
+    </div>
+    {% endif %}
+    
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">
+            <i class="bi bi-key"></i> Passwords
+        </div>
+        <ul class="sidebar-tree">
+            {% if passwords and passwords|length > 0 %}
+                {% for pwd in passwords[:20] %}
+                <li class="sidebar-tree-item">
+                    <a href="{{ url_for('passwords.index') }}" 
+                       class="sidebar-tree-link {{ 'active' if current_page == 'password' and current_id == pwd.id else '' }}">
+                        <span class="sidebar-tree-icon">🔑</span>
+                        {{ pwd.title }}
+                    </a>
+                </li>
+                {% endfor %}
+                {% if passwords|length > 20 %}
+                <li class="sidebar-tree-item">
+                    <a href="{{ url_for('passwords.index') }}" class="sidebar-tree-link text-muted">
+                        <small>... and {{ passwords|length - 20 }} more</small>
+                    </a>
+                </li>
+                {% endif %}
+            {% else %}
+                <li class="sidebar-tree-item">
+                    <span class="sidebar-tree-link text-muted">
+                        <small>No passwords</small>
+                    </span>
+                </li>
+            {% endif %}
+        </ul>
+    </div>
+    
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">
+            <i class="bi bi-person"></i> Contacts
+        </div>
+        <ul class="sidebar-tree">
+            {% if contacts and contacts|length > 0 %}
+                {% for contact in contacts[:20] %}
+                <li class="sidebar-tree-item">
+                    <a href="{{ url_for('contacts.index') }}" 
+                       class="sidebar-tree-link {{ 'active' if current_page == 'contact' and current_id == contact.id else '' }}">
+                        <span class="sidebar-tree-icon">👤</span>
+                        {{ contact.name }}
+                    </a>
+                </li>
+                {% endfor %}
+                {% if contacts|length > 20 %}
+                <li class="sidebar-tree-item">
+                    <a href="{{ url_for('contacts.index') }}" class="sidebar-tree-link text-muted">
+                        <small>... and {{ contacts|length - 20 }} more</small>
+                    </a>
+                </li>
+                {% endif %}
+            {% else %}
+                <li class="sidebar-tree-item">
+                    <span class="sidebar-tree-link text-muted">
+                        <small>No contacts</small>
+                    </span>
+                </li>
+            {% endif %}
+        </ul>
+    </div>
+</div>
+
+<script>
+function toggleTreeSection(element) {
+    const children = element.nextElementSibling;
+    const icon = element.querySelector('.tree-icon');
+    
+    if (children) {
+        if (children.style.display === 'none') {
+            children.style.display = 'block';
+            children.classList.add('expanded');
+            if (icon) icon.textContent = '▼';
+        } else {
+            children.style.display = 'none';
+            children.classList.remove('expanded');
+            if (icon) icon.textContent = '▶';
+        }
+    }
+}
+
+// Auto-expand tree sections containing active item
+document.addEventListener('DOMContentLoaded', function() {
+    const activeLink = document.querySelector('.sidebar-tree-link.active');
+    if (activeLink) {
+        let parent = activeLink.parentElement;
+        while (parent && parent.classList.contains('sidebar-tree-item')) {
+            const toggle = parent.querySelector('.sidebar-tree-toggle');
+            if (toggle) {
+                const children = toggle.nextElementSibling;
+                if (children) {
+                    children.style.display = 'block';
+                    children.classList.add('expanded');
+                    const icon = toggle.querySelector('.tree-icon');
+                    if (icon) icon.textContent = '▼';
+                }
+            }
+            parent = parent.parentElement;
+        }
+    }
+});
+</script>
+{% endmacro %}
+

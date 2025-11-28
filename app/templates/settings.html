@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - InfoGarden{% endblock %}
+
+{% block content %}
+<h1>Settings</h1>
+
+<div class="row mt-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>Backup Settings</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="backup_enabled" name="backup_enabled" 
+                                   {{ 'checked' if settings.get('backup_enabled', 'true') == 'true' else '' }}>
+                            <label class="form-check-label" for="backup_enabled">
+                                Enable automatic backups
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="backup_day" class="form-label">Backup Day</label>
+                        <select class="form-select" id="backup_day" name="backup_day">
+                            <option value="sunday" {{ 'selected' if settings.get('backup_day', 'sunday') == 'sunday' else '' }}>Sunday</option>
+                            <option value="monday" {{ 'selected' if settings.get('backup_day', 'sunday') == 'monday' else '' }}>Monday</option>
+                            <option value="tuesday" {{ 'selected' if settings.get('backup_day', 'sunday') == 'tuesday' else '' }}>Tuesday</option>
+                            <option value="wednesday" {{ 'selected' if settings.get('backup_day', 'sunday') == 'wednesday' else '' }}>Wednesday</option>
+                            <option value="thursday" {{ 'selected' if settings.get('backup_day', 'sunday') == 'thursday' else '' }}>Thursday</option>
+                            <option value="friday" {{ 'selected' if settings.get('backup_day', 'sunday') == 'friday' else '' }}>Friday</option>
+                            <option value="saturday" {{ 'selected' if settings.get('backup_day', 'sunday') == 'saturday' else '' }}>Saturday</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="backup_hour" class="form-label">Hour (0-23)</label>
+                                <input type="number" class="form-control" id="backup_hour" name="backup_hour" 
+                                       value="{{ settings.get('backup_hour', '0') }}" min="0" max="23">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="backup_minute" class="form-label">Minute (0-59)</label>
+                                <input type="number" class="form-control" id="backup_minute" name="backup_minute" 
+                                       value="{{ settings.get('backup_minute', '0') }}" min="0" max="59">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="retention_days" class="form-label">Backup Retention (days)</label>
+                        <input type="number" class="form-control" id="retention_days" name="retention_days" 
+                               value="{{ settings.get('retention_days', '30') }}" min="1">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Backup Management</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('core_auth.backup_create') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-success">Create Manual Backup</button>
+                </form>
+                <a href="{{ url_for('core_auth.backup_list') }}" class="btn btn-primary mt-2">View Backups</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

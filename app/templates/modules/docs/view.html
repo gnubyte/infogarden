@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "components/sidebar.html" import render_sidebar %}
+
+{% block title %}{{ doc.title }} - InfoGarden{% endblock %}
+
+{% block content %}
+<div class="content-with-both-sidebars">
+    {{ render_sidebar(doc_tree, passwords, contacts, 'doc', doc.id) }}
+    <div class="main-content">
+        <h1>{{ doc.title }}</h1>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <small class="text-muted">
+                                Created: {{ doc.created_at.strftime('%Y-%m-%d %H:%M:%S') if doc.created_at else '-' }} | 
+                                Updated: {{ doc.updated_at.strftime('%Y-%m-%d %H:%M:%S') if doc.updated_at else '-' }}
+                            </small>
+                        </div>
+                        <div class="markdown-content">
+                            {% if doc.content %}
+                            {{ doc.content|markdown|safe }}
+                            {% else %}
+                            <p class="text-muted">No content</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="right-sidebar">
+        <h5 class="mb-3">Actions</h5>
+        <a href="{{ url_for('docs.edit', doc_id=doc.id) }}" class="btn btn-primary">Edit</a>
+        <a href="{{ url_for('docs.export_pdf', doc_id=doc.id) }}" class="btn btn-success">Export PDF</a>
+        <a href="{{ url_for('docs.index') }}" class="btn btn-secondary">Back</a>
+    </div>
+</div>
+{% endblock %}
+

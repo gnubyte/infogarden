@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Edit User - InfoGarden{% endblock %}
+
+{% block content %}
+<h1>Edit User</h1>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username *</label>
+                        <input type="text" class="form-control" id="username" name="username" value="{{ user.username }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email *</label>
+                        <input type="email" class="form-control" id="email" name="email" value="{{ user.email }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password (leave blank to keep current)</label>
+                        <input type="password" class="form-control" id="password" name="password">
+                    </div>
+                    <div class="mb-3">
+                        <label for="role" class="form-label">Role *</label>
+                        <select class="form-select" id="role" name="role" required>
+                            {% for role in roles %}
+                            <option value="{{ role }}" {{ 'selected' if user.role == role else '' }}>{{ role }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="org_id" class="form-label">Organization</label>
+                        <select class="form-select" id="org_id" name="org_id">
+                            <option value="">None</option>
+                            {% for org in orgs %}
+                            <option value="{{ org.id }}" {{ 'selected' if user.org_id == org.id else '' }}>{{ org.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Update</button>
+                    <a href="{{ url_for('users.index') }}" class="btn btn-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

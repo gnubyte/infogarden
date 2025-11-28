@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% from "components/sidebar.html" import render_sidebar %}
+
+{% block title %}Passwords - InfoGarden{% endblock %}
+
+{% block content %}
+<div class="content-with-sidebar">
+    {{ render_sidebar(doc_tree, passwords, contacts, 'password', None) }}
+    <div class="main-content">
+        <h1>Passwords</h1>
+
+        <div class="row mt-4">
+            <div class="col-12">
+        <a href="{{ url_for('passwords.create') }}" class="btn btn-primary mb-3">Create Password Entry</a>
+        <div class="card">
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Link</th>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Date Added</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pwd in passwords %}
+                        <tr>
+                            <td>{{ pwd.title }}</td>
+                            <td>
+                                {% if pwd.link %}
+                                <a href="{{ pwd.link }}" target="_blank">{{ pwd.link[:30] }}...</a>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>{{ pwd.username or '-' }}</td>
+                            <td>{{ pwd.email or '-' }}</td>
+                            <td>{{ pwd.date_added.strftime('%Y-%m-%d') if pwd.date_added else '-' }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-info reveal-password" data-id="{{ pwd.id }}">Reveal</button>
+                                <a href="{{ url_for('passwords.edit', entry_id=pwd.id) }}" class="btn btn-sm btn-primary">Edit</a>
+                                <form method="POST" action="{{ url_for('passwords.delete', entry_id=pwd.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center">No password entries found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for revealing password -->
+<div class="modal fade" id="revealModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Password Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Password:</label>
+                    <input type="text" class="form-control" id="revealed-password" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">2FA Secret:</label>
+                    <input type="text" class="form-control" id="revealed-2fa" readonly>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.querySelectorAll('.reveal-password').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const entryId = this.getAttribute('data-id');
+            fetch(`/passwords/${entryId}/reveal`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('revealed-password').value = data.password || '';
+                document.getElementById('revealed-2fa').value = data.two_fa_secret || '';
+                const modal = new bootstrap.Modal(document.getElementById('revealModal'));
+                modal.show();
+            })
+            .catch(error => {
+                alert('Error revealing password: ' + error);
+            });
+        });
+    });
+</script>
+{% endblock %}
+

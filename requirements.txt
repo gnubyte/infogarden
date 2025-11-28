@@ -1,0 +1,16 @@
+Flask==3.0.0
+Flask-Login==0.6.3
+Flask-WTF==1.2.1
+WTForms==3.1.1
+SQLAlchemy==2.0.23
+PyMySQL==1.1.0
+cryptography==41.0.7
+WeasyPrint==60.2
+pyzbar==0.1.9
+Pillow==10.1.0
+python-dotenv==1.0.0
+markdown==3.5.1
+bcrypt==4.1.2
+Werkzeug==3.0.1
+APScheduler==3.10.4
+

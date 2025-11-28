@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Organizations - InfoGarden{% endblock %}
+
+{% block content %}
+<h1>Organizations</h1>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <a href="{{ url_for('orgs.create') }}" class="btn btn-primary mb-3">Create Organization</a>
+        <div class="card">
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for org in orgs %}
+                        <tr>
+                            <td>{{ org.name }}</td>
+                            <td>{{ org.description or '-' }}</td>
+                            <td>{{ org.created_at.strftime('%Y-%m-%d') if org.created_at else '-' }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('orgs.switch', org_id=org.id) }}" style="display: inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-info">Switch</button>
+                                </form>
+                                <a href="{{ url_for('orgs.edit', org_id=org.id) }}" class="btn btn-sm btn-primary">Edit</a>
+                                <form method="POST" action="{{ url_for('orgs.delete', org_id=org.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center">No organizations found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
