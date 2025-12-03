@@ -20,3 +20,5 @@ def build_document_tree(documents):
     
     return tree
 
+
+

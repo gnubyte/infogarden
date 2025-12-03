@@ -9,6 +9,45 @@
     <div class="col-md-8">
         <div class="card">
             <div class="card-header">
+                <h5>Branding</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="brand_name" class="form-label">Brand Name</label>
+                        <input type="text" class="form-control" id="brand_name" name="brand_name" 
+                               value="{{ settings.get('brand_name', 'InfoGarden') }}" 
+                               placeholder="InfoGarden">
+                        <small class="form-text text-muted">This name will replace "InfoGarden" in the navbar and throughout the application.</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Brand Name</button>
+                </form>
+                
+                <hr>
+                
+                <form method="POST" action="{{ url_for('core_auth.upload_logo') }}" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="logo" class="form-label">Brand Logo (JPEG)</label>
+                        <input type="file" class="form-control" id="logo" name="logo" accept="image/jpeg,image/jpg">
+                        <small class="form-text text-muted">Upload a JPEG image that will appear in the navbar and on the login page.</small>
+                    </div>
+                    {% if settings.get('brand_logo') %}
+                    <div class="mb-3">
+                        <label class="form-label">Current Logo:</label>
+                        <div>
+                            <img src="{{ settings.get('brand_logo') }}" alt="Brand Logo" style="max-height: 60px; max-width: 200px;">
+                        </div>
+                    </div>
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary">Upload Logo</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
                 <h5>Backup Settings</h5>
             </div>
             <div class="card-body">

@@ -1,10 +1,18 @@
-from flask import render_template, request, redirect, url_for, flash, session, jsonify
+from flask import render_template, request, redirect, url_for, flash, session, jsonify, current_app
 from flask_login import login_required, current_user
 from app.modules.orgs import bp
 from app.core import models
 from app.core.auth import require_global_admin, require_org_access
 from app.core.activity_logger import log_activity
 from app import db_session
+import os
+from werkzeug.utils import secure_filename
+from datetime import datetime
+
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @bp.route('/')
 @login_required
@@ -29,12 +37,31 @@ def create():
     if request.method == 'POST':
         name = request.form.get('name')
         description = request.form.get('description', '')
+        status = request.form.get('status', 'active')
         
         if not name:
             flash('Organization name is required', 'error')
             return render_template('modules/orgs/create.html')
         
-        org = models.Organization(name=name, description=description)
+        org = models.Organization(name=name, description=description, status=status)
+        
+        # Handle logo upload
+        if 'logo' in request.files:
+            file = request.files['logo']
+            if file and file.filename != '' and allowed_file(file.filename):
+                # Generate unique filename
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
+                filename = secure_filename(file.filename)
+                filename = f'org_{timestamp}{filename}'
+                
+                upload_folder = current_app.config['UPLOAD_FOLDER']
+                os.makedirs(upload_folder, exist_ok=True)
+                filepath = os.path.join(upload_folder, filename)
+                file.save(filepath)
+                
+                # Store relative path for URL generation
+                org.logo_path = url_for('static', filename=f'uploads/{filename}')
+        
         db_session.add(org)
         db_session.commit()
         
@@ -57,6 +84,39 @@ def edit(org_id):
     if request.method == 'POST':
         org.name = request.form.get('name')
         org.description = request.form.get('description', '')
+        org.status = request.form.get('status', 'active')
+        
+        # Handle logo upload
+        if 'logo' in request.files:
+            file = request.files['logo']
+            if file and file.filename != '' and allowed_file(file.filename):
+                # Delete old logo if it exists
+                if org.logo_path:
+                    # Extract filename from URL path (e.g., /static/uploads/filename.jpg -> uploads/filename.jpg)
+                    if '/static/' in org.logo_path:
+                        relative_path = org.logo_path.split('/static/')[-1]
+                    else:
+                        relative_path = org.logo_path.lstrip('/')
+                    old_filepath = os.path.join(current_app.static_folder, relative_path)
+                    if os.path.exists(old_filepath):
+                        try:
+                            os.remove(old_filepath)
+                        except OSError:
+                            pass  # Ignore errors deleting old file
+                
+                # Generate unique filename
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
+                filename = secure_filename(file.filename)
+                filename = f'org_{org_id}_{timestamp}{filename}'
+                
+                upload_folder = current_app.config['UPLOAD_FOLDER']
+                os.makedirs(upload_folder, exist_ok=True)
+                filepath = os.path.join(upload_folder, filename)
+                file.save(filepath)
+                
+                # Store relative path for URL generation
+                org.logo_path = url_for('static', filename=f'uploads/{filename}')
+        
         db_session.commit()
         
         log_activity('update', 'org', org_id)

@@ -10,12 +10,96 @@ from app.modules.docs.pdf_export import export_document_to_pdf
 from app.core.sidebar_utils import build_document_tree
 from app import db_session, csrf
 import os
+import re
+import html
 from werkzeug.utils import secure_filename
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def html_to_markdown(html_content):
+    """Convert HTML to Markdown (basic conversion)"""
+    if not html_content:
+        return ''
+    
+    # Remove script and style tags
+    html_content = re.sub(r'<script[^>]*>.*?</script>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+    html_content = re.sub(r'<style[^>]*>.*?</style>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Convert headings
+    html_content = re.sub(r'<h1[^>]*>(.*?)</h1>', r'# \1\n\n', html_content, flags=re.IGNORECASE)
+    html_content = re.sub(r'<h2[^>]*>(.*?)</h2>', r'## \1\n\n', html_content, flags=re.IGNORECASE)
+    html_content = re.sub(r'<h3[^>]*>(.*?)</h3>', r'### \1\n\n', html_content, flags=re.IGNORECASE)
+    html_content = re.sub(r'<h4[^>]*>(.*?)</h4>', r'#### \1\n\n', html_content, flags=re.IGNORECASE)
+    html_content = re.sub(r'<h5[^>]*>(.*?)</h5>', r'##### \1\n\n', html_content, flags=re.IGNORECASE)
+    html_content = re.sub(r'<h6[^>]*>(.*?)</h6>', r'###### \1\n\n', html_content, flags=re.IGNORECASE)
+    
+    # Convert bold and italic
+    html_content = re.sub(r'<strong[^>]*>(.*?)</strong>', r'**\1**', html_content, flags=re.IGNORECASE)
+    html_content = re.sub(r'<b[^>]*>(.*?)</b>', r'**\1**', html_content, flags=re.IGNORECASE)
+    html_content = re.sub(r'<em[^>]*>(.*?)</em>', r'*\1*', html_content, flags=re.IGNORECASE)
+    html_content = re.sub(r'<i[^>]*>(.*?)</i>', r'*\1*', html_content, flags=re.IGNORECASE)
+    
+    # Convert links
+    html_content = re.sub(r'<a[^>]*href=["\']([^"\']*)["\'][^>]*>(.*?)</a>', r'[\2](\1)', html_content, flags=re.IGNORECASE)
+    
+    # Convert images
+    html_content = re.sub(r'<img[^>]*src=["\']([^"\']*)["\'][^>]*alt=["\']([^"\']*)["\'][^>]*>', r'![\2](\1)', html_content, flags=re.IGNORECASE)
+    html_content = re.sub(r'<img[^>]*src=["\']([^"\']*)["\'][^>]*>', r'![](\1)', html_content, flags=re.IGNORECASE)
+    
+    # Convert lists
+    html_content = re.sub(r'<ul[^>]*>', '', html_content, flags=re.IGNORECASE)
+    html_content = re.sub(r'</ul>', '\n', html_content, flags=re.IGNORECASE)
+    html_content = re.sub(r'<ol[^>]*>', '', html_content, flags=re.IGNORECASE)
+    html_content = re.sub(r'</ol>', '\n', html_content, flags=re.IGNORECASE)
+    html_content = re.sub(r'<li[^>]*>(.*?)</li>', r'- \1\n', html_content, flags=re.IGNORECASE)
+    
+    # Convert paragraphs
+    html_content = re.sub(r'<p[^>]*>(.*?)</p>', r'\1\n\n', html_content, flags=re.IGNORECASE)
+    
+    # Convert line breaks
+    html_content = re.sub(r'<br[^>]*>', '\n', html_content, flags=re.IGNORECASE)
+    
+    # Convert code blocks
+    html_content = re.sub(r'<pre[^>]*><code[^>]*>(.*?)</code></pre>', r'```\n\1\n```', html_content, flags=re.DOTALL | re.IGNORECASE)
+    html_content = re.sub(r'<code[^>]*>(.*?)</code>', r'`\1`', html_content, flags=re.IGNORECASE)
+    
+    # Convert blockquotes
+    html_content = re.sub(r'<blockquote[^>]*>(.*?)</blockquote>', r'> \1', html_content, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Remove remaining HTML tags
+    html_content = re.sub(r'<[^>]+>', '', html_content)
+    
+    # Decode HTML entities
+    html_content = html.unescape(html_content)
+    
+    # Clean up extra whitespace
+    html_content = re.sub(r'\n{3,}', '\n\n', html_content)
+    html_content = html_content.strip()
+    
+    return html_content
+
+@bp.route('/convert-content', methods=['POST'])
+@csrf.exempt
+@login_required
+def convert_content():
+    """Convert content between markdown and HTML"""
+    data = request.get_json()
+    content = data.get('content', '')
+    from_type = data.get('from_type', 'markdown')
+    to_type = data.get('to_type', 'html')
+    
+    if from_type == 'markdown' and to_type == 'html':
+        import markdown
+        html_content = markdown.markdown(content, extensions=['extra', 'codehilite'])
+        return jsonify({'content': html_content, 'content_type': 'html'})
+    elif from_type == 'html' and to_type == 'markdown':
+        markdown_content = html_to_markdown(content)
+        return jsonify({'content': markdown_content, 'content_type': 'markdown'})
+    else:
+        return jsonify({'error': 'Invalid conversion'}), 400
 
 @bp.route('/')
 @login_required
@@ -58,6 +142,7 @@ def create():
     if request.method == 'POST':
         title = request.form.get('title')
         content = request.form.get('content', '')
+        content_type = request.form.get('content_type', 'markdown')
         
         if not title:
             flash('Title is required', 'error')
@@ -74,6 +159,7 @@ def create():
             org_id=org_id,
             title=title,
             content=content,
+            content_type=content_type,
             created_by=current_user.id
         )
         db_session.add(doc)
@@ -133,6 +219,7 @@ def edit(doc_id):
     if request.method == 'POST':
         doc.title = request.form.get('title')
         doc.content = request.form.get('content', '')
+        doc.content_type = request.form.get('content_type', 'markdown')
         doc.updated_by = current_user.id
         db_session.commit()
         

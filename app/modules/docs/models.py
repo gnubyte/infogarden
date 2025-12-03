@@ -17,6 +17,7 @@ class Document(Base):
     org_id = Column(Integer, ForeignKey('organizations.id'), nullable=False)
     title = Column(String(200), nullable=False)
     content = Column(Text, nullable=True)
+    content_type = Column(String(20), default='markdown', nullable=False)  # 'markdown' or 'html'
     created_by = Column(Integer, ForeignKey('users.id'), nullable=False)
     updated_by = Column(Integer, ForeignKey('users.id'), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

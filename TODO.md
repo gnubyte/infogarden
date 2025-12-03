@@ -1,3 +1,11 @@
+Wiki:
+ - convert doc to PDF, download as PDF
+ - email doc as PDF to user
+ - SMTP settings
+ - Add an overview page for the stats around a company (how many users, active, etc.)
+ - export company details page
+ - websites and assets related to a company.
+
 Passwords:
 
  - add a render view of a finished passwords

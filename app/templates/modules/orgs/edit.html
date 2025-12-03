@@ -9,7 +9,7 @@
     <div class="col-md-6">
         <div class="card">
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" enctype="multipart/form-data">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label for="name" class="form-label">Name *</label>
@@ -18,6 +18,25 @@
                     <div class="mb-3">
                         <label for="description" class="form-label">Description</label>
                         <textarea class="form-control" id="description" name="description" rows="3">{{ org.description or '' }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Status *</label>
+                        <select class="form-control" id="status" name="status" required>
+                            <option value="active" {% if org.status == 'active' %}selected{% endif %}>Active</option>
+                            <option value="inactive" {% if org.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                            <option value="archived" {% if org.status == 'archived' %}selected{% endif %}>Archived</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="logo" class="form-label">Logo</label>
+                        {% if org.logo_path %}
+                        <div class="mb-2">
+                            <img src="{{ org.logo_path }}" alt="{{ org.name }} logo" style="max-height: 100px; max-width: 200px; object-fit: contain;">
+                            <p class="text-muted small mt-1">Current logo</p>
+                        </div>
+                        {% endif %}
+                        <input type="file" class="form-control" id="logo" name="logo" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp">
+                        <small class="form-text text-muted">Accepted formats: PNG, JPG, JPEG, GIF, WEBP. Leave empty to keep current logo.</small>
                     </div>
                     <button type="submit" class="btn btn-primary">Update</button>
                     <a href="{{ url_for('orgs.index') }}" class="btn btn-secondary">Cancel</a>

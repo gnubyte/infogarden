@@ -20,8 +20,33 @@
                         <input type="text" class="form-control" id="title" name="title" value="{{ doc.title }}" required>
                     </div>
                     <div class="mb-3">
-                        <label for="content" class="form-label">Content (Markdown)</label>
-                        <textarea class="form-control" id="content" name="content" rows="20">{{ doc.content or '' }}</textarea>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <label for="content" class="form-label mb-0">Content</label>
+                                <small class="text-muted d-block">Document Type: <strong>{{ 'Rich Text' if doc.content_type == 'html' else 'Markdown' }}</strong></small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="preview-btn" style="{{ 'display: block;' if doc.content_type == 'html' else 'display: none;' }}">
+                                <span id="preview-btn-text">Preview</span>
+                            </button>
+                        </div>
+                        <div id="markdown-editor-container" style="{{ 'display: none;' if doc.content_type == 'html' else '' }}">
+                            <textarea class="form-control" id="content" name="content" rows="20">{% if doc.content_type == 'markdown' %}{{ doc.content or '' }}{% endif %}</textarea>
+                        </div>
+                        <div id="richtext-editor-container" style="{{ 'display: block;' if doc.content_type == 'html' else 'display: none;' }}">
+                            <div id="richtext-editor" style="min-height: 400px;"></div>
+                            <textarea id="richtext-content" name="content" style="display: none;">{{ doc.content or '' if doc.content_type == 'html' else '' }}</textarea>
+                        </div>
+                        <div id="preview-container" style="display: none; margin-top: 1rem;">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">Preview</h6>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="close-preview-btn">Close</button>
+                                </div>
+                                <div class="card-body" id="preview-content" style="min-height: 400px; max-height: 600px; overflow-y: auto;">
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="content_type" name="content_type" value="{{ doc.content_type or 'markdown' }}">
                     </div>
                     <button type="submit" class="btn btn-primary">Update</button>
                     <a href="{{ url_for('docs.view', doc_id=doc.id) }}" class="btn btn-secondary">Cancel</a>
@@ -34,7 +59,80 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Quill.js for rich text editing -->
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
 <script>
+    let easyMDE = null;
+    let quill = null;
+    let currentEditorType = '{{ doc.content_type or "markdown" }}';
+    const originalContentType = '{{ doc.content_type or "markdown" }}';
+    
+    // Initialize Quill rich text editor
+    function initQuill() {
+        quill = new Quill('#richtext-editor', {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    [{ 'header': [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    [{ 'color': [] }, { 'background': [] }],
+                    ['link', 'image'],
+                    ['code-block', 'blockquote'],
+                    ['clean']
+                ]
+            }
+        });
+        
+        // Set initial content if HTML
+        {% if doc.content_type == 'html' and doc.content %}
+        quill.root.innerHTML = {{ doc.content|tojson }};
+        {% endif %}
+        
+        // Handle clipboard paste for images
+        const editorElement = document.querySelector('#richtext-editor');
+        editorElement.addEventListener('paste', function(e) {
+            const items = e.clipboardData.items;
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (item.type.indexOf('image') !== -1) {
+                    e.preventDefault();
+                    const file = item.getAsFile();
+                    if (file) {
+                        uploadImageToServer(file, function(url) {
+                            if (url) {
+                                const range = quill.getSelection();
+                                quill.insertEmbed(range.index, 'image', url);
+                            }
+                        });
+                    }
+                    return;
+                }
+            }
+        });
+        
+        // Handle image upload in Quill toolbar
+        const toolbar = quill.getModule('toolbar');
+        toolbar.addHandler('image', function() {
+            const input = document.createElement('input');
+            input.setAttribute('type', 'file');
+            input.setAttribute('accept', 'image/png, image/jpeg, image/gif, image/webp');
+            input.click();
+            
+            input.onchange = function() {
+                const file = input.files[0];
+                if (!file) return;
+                uploadImageToServer(file, function(url) {
+                    if (url) {
+                        const range = quill.getSelection();
+                        quill.insertEmbed(range.index, 'image', url);
+                    }
+                });
+            };
+        });
+    }
+    
     // Wait for EasyMDE to load
     function initEasyMDE() {
         if (typeof EasyMDE !== 'undefined') {
@@ -52,37 +150,18 @@
                     sbOnUploaded: 'Image uploaded successfully'
                 },
                 imageUploadFunction: function(file, onSuccess, onError) {
-                    const formData = new FormData();
-                    formData.append('image', file);
-                    // Get CSRF token from the form
-                    const csrfToken = document.querySelector('input[name="csrf_token"]');
-                    if (csrfToken) {
-                        formData.append('csrf_token', csrfToken.value);
-                    }
-                    
-                    fetch('{{ url_for("docs.upload_image") }}', {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(response => {
-                        if (!response.ok) {
-                            return response.text().then(text => {
-                                throw new Error(`Server error: ${response.status} ${response.statusText}`);
-                            });
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        if (data.url) {
-                            // EasyMDE will format this as ![filename](url) automatically
-                            onSuccess(data.url);
+                    uploadImageToServer(file, function(url) {
+                        if (url) {
+                            onSuccess(url);
                         } else {
-                            onError(data.error || 'Upload failed');
+                            onError('Upload failed');
                         }
-                    })
-                    .catch(error => {
-                        onError('Upload failed: ' + error.message);
                     });
+                },
+                // Enable clipboard paste for images
+                renderingConfig: {
+                    singleLineBreaks: false,
+                    codeSyntaxHighlighting: true
                 },
                 toolbar: [
                     'bold', 'italic', 'strikethrough', '|',
@@ -112,6 +191,28 @@
                 });
             }
             
+            // Handle clipboard paste for images in EasyMDE
+            easyMDE.codemirror.on('paste', function(editor, event) {
+                const items = event.clipboardData.items;
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.type.indexOf('image') !== -1) {
+                        event.preventDefault();
+                        const file = item.getAsFile();
+                        if (file) {
+                            uploadImageToServer(file, function(url) {
+                                if (url) {
+                                    const cursor = editor.getCursor();
+                                    const markdownImage = `![${file.name}](${url})`;
+                                    editor.replaceRange(markdownImage, cursor);
+                                }
+                            });
+                        }
+                        return;
+                    }
+                }
+            });
+            
             // Setup image resize when preview updates
             easyMDE.codemirror.on('update', function() {
                 setTimeout(setupImageResize, 100);
@@ -136,7 +237,31 @@
             setTimeout(initEasyMDE, 100);
         }
     }
-    initEasyMDE();
+    
+    // Initialize the appropriate editor based on document type
+    // Document type is fixed - no switching allowed when editing
+    if (currentEditorType === 'html') {
+        initQuill();
+    } else {
+        initEasyMDE();
+    }
+    
+    // Handle form submission - sync content
+    document.getElementById('doc-form').addEventListener('submit', function(e) {
+        const contentType = '{{ doc.content_type or "markdown" }}';
+        
+        if (contentType === 'html' && quill) {
+            // Get HTML from Quill and put it in hidden textarea
+            const htmlContent = quill.root.innerHTML;
+            document.getElementById('richtext-content').value = htmlContent;
+            // Also update the main content field
+            document.getElementById('content').value = htmlContent;
+        } else if (contentType === 'markdown' && easyMDE) {
+            // Get markdown from EasyMDE
+            const markdownContent = easyMDE.value();
+            document.getElementById('content').value = markdownContent;
+        }
+    });
     
     // Image resize dialog function
     function openImageResizeDialog(imgElement, easyMDE) {
@@ -231,7 +356,7 @@
                 previewImg.style.height = 'auto';
             } else if (heightUnitVal === 'px') {
                 previewImg.style.height = height + 'px';
-            } else {
+        } else {
                 previewImg.style.height = height + '%';
             }
         }
@@ -396,6 +521,49 @@
         left: 0;
         width: 100%;
         height: 100%;
+    }
+    /* Preview container styling */
+    #preview-content {
+        line-height: 1.6;
+    }
+    #preview-content img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin: 1rem auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    #preview-content h1, #preview-content h2, #preview-content h3 {
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    #preview-content p {
+        margin-bottom: 1rem;
+    }
+    #preview-content ul, #preview-content ol {
+        margin-bottom: 1rem;
+        padding-left: 2rem;
+    }
+    #preview-content blockquote {
+        border-left: 4px solid #ddd;
+        padding-left: 1rem;
+        margin: 1rem 0;
+        color: #666;
+    }
+    #preview-content code {
+        background-color: #f4f4f4;
+        padding: 2px 5px;
+        border-radius: 3px;
+        font-family: 'Courier New', monospace;
+    }
+    #preview-content pre {
+        background-color: #f4f4f4;
+        padding: 15px;
+        border-radius: 5px;
+        overflow-x: auto;
+        margin: 1rem 0;
     }
 </style>
 {% endblock %}

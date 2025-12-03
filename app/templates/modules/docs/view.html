@@ -21,9 +21,13 @@
                         </div>
                         <div class="markdown-content">
                             {% if doc.content %}
-                            {{ doc.content|markdown|safe }}
+                                {% if doc.content_type == 'html' %}
+                                    <div class="rich-text-content">{{ doc.content|safe }}</div>
+                                {% else %}
+                                    {{ doc.content|markdown|safe }}
+                                {% endif %}
                             {% else %}
-                            <p class="text-muted">No content</p>
+                                <p class="text-muted">No content</p>
                             {% endif %}
                         </div>
                     </div>
@@ -38,5 +42,52 @@
         <a href="{{ url_for('docs.index') }}" class="btn btn-secondary">Back</a>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .rich-text-content {
+        line-height: 1.6;
+    }
+    .rich-text-content img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin: 1rem auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .rich-text-content h1, .rich-text-content h2, .rich-text-content h3 {
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    .rich-text-content p {
+        margin-bottom: 1rem;
+    }
+    .rich-text-content ul, .rich-text-content ol {
+        margin-bottom: 1rem;
+        padding-left: 2rem;
+    }
+    .rich-text-content blockquote {
+        border-left: 4px solid #ddd;
+        padding-left: 1rem;
+        margin: 1rem 0;
+        color: #666;
+    }
+    .rich-text-content code {
+        background-color: #f4f4f4;
+        padding: 2px 5px;
+        border-radius: 3px;
+        font-family: 'Courier New', monospace;
+    }
+    .rich-text-content pre {
+        background-color: #f4f4f4;
+        padding: 15px;
+        border-radius: 5px;
+        overflow-x: auto;
+        margin: 1rem 0;
+    }
+</style>
 {% endblock %}
 

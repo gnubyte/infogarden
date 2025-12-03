@@ -72,16 +72,26 @@ def create_app():
             return redirect(request.referrer)
         return redirect(url_for('core_auth.dashboard'))
     
-    # Context processor to make current org available in all templates
+    # Context processor to make current org and branding available in all templates
     @app.context_processor
-    def inject_current_org():
+    def inject_template_vars():
         from flask import session
         from flask_login import current_user
         org = None
         org_id = session.get('current_org_id') or (current_user.org_id if current_user.is_authenticated else None)
         if org_id:
             org = core_models.Organization.query.get(org_id)
-        return dict(current_org=org)
+        
+        # Get branding settings
+        brand_name = 'InfoGarden'
+        brand_logo = None
+        for setting in core_models.Setting.query.filter(core_models.Setting.key.in_(['brand_name', 'brand_logo'])).all():
+            if setting.key == 'brand_name' and setting.value:
+                brand_name = setting.value
+            elif setting.key == 'brand_logo' and setting.value:
+                brand_logo = setting.value
+        
+        return dict(current_org=org, brand_name=brand_name, brand_logo=brand_logo)
     
     # Setup scheduled backups
     from app.core.backup import setup_backup_scheduler

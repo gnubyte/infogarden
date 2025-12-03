@@ -1,12 +1,55 @@
-from flask import render_template_string
+from flask import render_template_string, current_app, request
 from weasyprint import HTML
 import markdown
 from datetime import datetime
+import os
+import re
 
 def export_document_to_pdf(document, organization=None):
-    """Export a markdown document to PDF"""
-    # Convert markdown to HTML
-    html_content = markdown.markdown(document.content or '', extensions=['extra', 'codehilite'])
+    """Export a document to PDF (supports both markdown and HTML)"""
+    # Convert content to HTML based on content_type
+    if document.content_type == 'html':
+        html_content = document.content or ''
+    else:
+        # Convert markdown to HTML
+        html_content = markdown.markdown(document.content or '', extensions=['extra', 'codehilite'])
+    
+    # Convert relative image URLs to absolute file paths for WeasyPrint
+    # WeasyPrint needs absolute paths to resolve images
+    def convert_image_paths(html):
+        """Convert relative image URLs to absolute file paths"""
+        # Pattern to match img src attributes with relative URLs
+        def replace_image(match):
+            img_tag = match.group(0)
+            src_match = re.search(r'src=["\']([^"\']+)["\']', img_tag)
+            if src_match:
+                src = src_match.group(1)
+                # If it's a relative URL starting with /static/
+                if src.startswith('/static/'):
+                    # Convert to absolute file path
+                    static_folder = current_app.static_folder
+                    relative_path = src.replace('/static/', '')
+                    absolute_path = os.path.abspath(os.path.join(static_folder, relative_path))
+                    # Use file:// protocol for WeasyPrint
+                    if os.path.exists(absolute_path):
+                        # Normalize path separators for file:// URL (Unix-style)
+                        file_path = absolute_path.replace('\\', '/')
+                        # On Windows, file:// URLs need three slashes: file:///C:/path
+                        # On Unix, file:// URLs need two slashes: file:///path
+                        if os.name == 'nt' and not file_path.startswith('/'):
+                            file_url = f'file:///{file_path}'
+                        else:
+                            file_url = f'file://{file_path}'
+                        img_tag = img_tag.replace(src, file_url)
+                # If it's already a data URL, absolute URL, or file:// URL, leave it
+            return img_tag
+        
+        # Replace all img tags with relative URLs
+        html = re.sub(r'<img[^>]+src=["\'][^"\']+["\'][^>]*>', replace_image, html, flags=re.IGNORECASE)
+        return html
+    
+    # Convert image paths in HTML content
+    html_content = convert_image_paths(html_content)
     
     # Create HTML template with styling
     html_template = f"""
@@ -99,6 +142,7 @@ def export_document_to_pdf(document, organization=None):
     """
     
     # Generate PDF
+    # WeasyPrint will use the file:// URLs we converted in the HTML
     pdf = HTML(string=html_template).write_pdf()
     return pdf
 

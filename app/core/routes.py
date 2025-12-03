@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, send_file, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, send_file, jsonify, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from datetime import datetime
 from app.core import models
@@ -6,6 +6,7 @@ from app.core.auth import require_global_admin
 from app.core.activity_logger import log_activity
 from app.core.backup import create_backup, restore_backup
 from app import db_session
+from werkzeug.utils import secure_filename
 import os
 
 bp = Blueprint('core_auth', __name__)
@@ -89,7 +90,15 @@ def login():
         
         if not username or not password:
             flash('Username and password are required', 'error')
-            return render_template('login.html')
+            # Get branding for template
+            brand_name = 'InfoGarden'
+            brand_logo = None
+            for setting in models.Setting.query.filter(models.Setting.key.in_(['brand_name', 'brand_logo'])).all():
+                if setting.key == 'brand_name' and setting.value:
+                    brand_name = setting.value
+                elif setting.key == 'brand_logo' and setting.value:
+                    brand_logo = setting.value
+            return render_template('login.html', brand_name=brand_name, brand_logo=brand_logo)
         
         user = models.User.query.filter_by(username=username).first()
         
@@ -108,7 +117,16 @@ def login():
         else:
             flash('Invalid username or password', 'error')
     
-    return render_template('login.html')
+    # Get branding for template
+    brand_name = 'InfoGarden'
+    brand_logo = None
+    for setting in models.Setting.query.filter(models.Setting.key.in_(['brand_name', 'brand_logo'])).all():
+        if setting.key == 'brand_name' and setting.value:
+            brand_name = setting.value
+        elif setting.key == 'brand_logo' and setting.value:
+            brand_logo = setting.value
+    
+    return render_template('login.html', brand_name=brand_name, brand_logo=brand_logo)
 
 @bp.route('/logout')
 @login_required
@@ -145,13 +163,17 @@ def settings():
         backup_minute = int(request.form.get('backup_minute', 0))
         retention_days = int(request.form.get('retention_days', 30))
         
+        # Update brand name
+        brand_name = request.form.get('brand_name', '').strip()
+        
         # Store in settings table
         settings_map = {
             'backup_enabled': str(backup_enabled).lower(),
             'backup_day': backup_day,
             'backup_hour': str(backup_hour),
             'backup_minute': str(backup_minute),
-            'retention_days': str(retention_days)
+            'retention_days': str(retention_days),
+            'brand_name': brand_name
         }
         
         for key, value in settings_map.items():
@@ -173,6 +195,47 @@ def settings():
         settings_dict[setting.key] = setting.value
     
     return render_template('settings.html', settings=settings_dict)
+
+@bp.route('/settings/upload-logo', methods=['POST'])
+@login_required
+@require_global_admin
+def upload_logo():
+    """Upload branding logo"""
+    if 'logo' not in request.files:
+        flash('No file provided', 'error')
+        return redirect(url_for('core_auth.settings'))
+    
+    file = request.files['logo']
+    if file.filename == '':
+        flash('No file selected', 'error')
+        return redirect(url_for('core_auth.settings'))
+    
+    # Check if it's a JPEG
+    if file and file.filename.lower().endswith(('.jpg', '.jpeg')):
+        filename = secure_filename('brand_logo.jpg')
+        
+        # Save to static/uploads directory
+        upload_folder = current_app.config['UPLOAD_FOLDER']
+        os.makedirs(upload_folder, exist_ok=True)
+        filepath = os.path.join(upload_folder, filename)
+        file.save(filepath)
+        
+        # Store logo path in settings
+        logo_url = url_for('static', filename=f'uploads/{filename}')
+        setting = models.Setting.query.filter_by(key='brand_logo').first()
+        if setting:
+            setting.value = logo_url
+        else:
+            setting = models.Setting(key='brand_logo', value=logo_url)
+            db_session.add(setting)
+        
+        db_session.commit()
+        flash('Logo uploaded successfully', 'success')
+        log_activity('update', 'settings', None, {'action': 'logo_upload'})
+    else:
+        flash('Invalid file type. Please upload a JPEG image.', 'error')
+    
+    return redirect(url_for('core_auth.settings'))
 
 @bp.route('/backup/create', methods=['POST'])
 @login_required

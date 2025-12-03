@@ -9,7 +9,7 @@
     <div class="col-md-6">
         <div class="card">
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" enctype="multipart/form-data">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label for="name" class="form-label">Name *</label>
@@ -18,6 +18,19 @@
                     <div class="mb-3">
                         <label for="description" class="form-label">Description</label>
                         <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Status *</label>
+                        <select class="form-control" id="status" name="status" required>
+                            <option value="active" selected>Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="archived">Archived</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="logo" class="form-label">Logo</label>
+                        <input type="file" class="form-control" id="logo" name="logo" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp">
+                        <small class="form-text text-muted">Accepted formats: PNG, JPG, JPEG, GIF, WEBP</small>
                     </div>
                     <button type="submit" class="btn btn-primary">Create</button>
                     <a href="{{ url_for('orgs.index') }}" class="btn btn-secondary">Cancel</a>

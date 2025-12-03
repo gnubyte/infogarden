@@ -59,6 +59,8 @@ class Organization(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
+    status = Column(String(50), nullable=False, default='active')  # active, inactive, archived
+    logo_path = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     users = relationship('User', back_populates='organization')

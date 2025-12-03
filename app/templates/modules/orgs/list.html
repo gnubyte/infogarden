@@ -13,8 +13,10 @@
                 <table class="table">
                     <thead>
                         <tr>
+                            <th>Logo</th>
                             <th>Name</th>
                             <th>Description</th>
+                            <th>Status</th>
                             <th>Created</th>
                             <th>Actions</th>
                         </tr>
@@ -22,8 +24,26 @@
                     <tbody>
                         {% for org in orgs %}
                         <tr>
+                            <td>
+                                {% if org.logo_path %}
+                                <img src="{{ org.logo_path }}" alt="{{ org.name }} logo" style="max-height: 50px; max-width: 100px; object-fit: contain;">
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                             <td>{{ org.name }}</td>
                             <td>{{ org.description or '-' }}</td>
+                            <td>
+                                {% if org.status == 'active' %}
+                                <span class="badge bg-success">Active</span>
+                                {% elif org.status == 'inactive' %}
+                                <span class="badge bg-warning">Inactive</span>
+                                {% elif org.status == 'archived' %}
+                                <span class="badge bg-secondary">Archived</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ org.status }}</span>
+                                {% endif %}
+                            </td>
                             <td>{{ org.created_at.strftime('%Y-%m-%d') if org.created_at else '-' }}</td>
                             <td>
                                 <form method="POST" action="{{ url_for('orgs.switch', org_id=org.id) }}" style="display: inline;">
@@ -39,7 +59,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="4" class="text-center">No organizations found</td>
+                            <td colspan="6" class="text-center">No organizations found</td>
                         </tr>
                         {% endfor %}
                     </tbody>
