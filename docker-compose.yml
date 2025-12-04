@@ -1,16 +1,14 @@
-version: '3.8'
-
 services:
   db:
     image: mysql:8.0
     container_name: infogarden_db
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-infogarden}
-      MYSQL_USER: ${MYSQL_USER:-infogarden}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-infogarden}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-${DB_NAME:-infogarden}}
+      MYSQL_USER: ${MYSQL_USER:-${DB_USER:-infogarden}}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-${DB_PASSWORD:-infogarden}}
     ports:
-      - "3306:3306"
+      - "${DB_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -29,13 +27,26 @@ services:
       - uploads_data:/app/app/static/uploads
       - backups_data:/app/app/backups
     ports:
-      - "5000:5000"
+      - "${FLASK_PORT:-5000}:5000"
     environment:
       FLASK_APP: app
       FLASK_ENV: ${FLASK_ENV:-development}
-      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-infogarden}:${MYSQL_PASSWORD:-infogarden}@db/${MYSQL_DATABASE:-infogarden}
+      # Database connection - can use DATABASE_URL or individual components
+      DATABASE_URL: ${DATABASE_URL:-}
+      DB_HOST: ${DB_HOST:-db}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USER: ${DB_USER:-${MYSQL_USER:-infogarden}}
+      DB_PASSWORD: ${DB_PASSWORD:-${MYSQL_PASSWORD:-infogarden}}
+      DB_NAME: ${DB_NAME:-${MYSQL_DATABASE:-infogarden}}
+      # Application settings
       SECRET_KEY: ${SECRET_KEY:-change-this-secret-key-in-production}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      # Backup settings
+      BACKUP_ENABLED: ${BACKUP_ENABLED:-true}
+      BACKUP_DAY: ${BACKUP_DAY:-sunday}
+      BACKUP_HOUR: ${BACKUP_HOUR:-0}
+      BACKUP_MINUTE: ${BACKUP_MINUTE:-0}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
     depends_on:
       db:
         condition: service_healthy

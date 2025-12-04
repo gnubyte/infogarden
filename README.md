@@ -36,13 +36,37 @@ A comprehensive wiki and knowledge management system designed for IT Managed Ser
    ```
 
 2. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   ```
-   Edit `.env` and set:
+
+   Create a `.env` file in the project root with the following variables:
+
+   **Required:**
    - `SECRET_KEY`: A random secret key for Flask sessions
    - `ENCRYPTION_KEY`: A Fernet encryption key (generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
-   - Database credentials
+
+   **Database Connection (choose one method):**
+   
+   **Option 1: Full connection string**
+   ```bash
+   DATABASE_URL=mysql+pymysql://user:password@host:port/database
+   ```
+   
+   **Option 2: Individual components (recommended for Docker)**
+   ```bash
+   DB_HOST=localhost          # or 'db' when using docker-compose
+   DB_PORT=3306
+   DB_USER=infogarden
+   DB_PASSWORD=your_password
+   DB_NAME=infogarden
+   ```
+
+   **Optional:**
+   - `FLASK_ENV`: Set to `production` for production deployments
+   - `FLASK_PORT`: Port for the web service (default: 5000)
+   - `BACKUP_ENABLED`: Enable/disable automatic backups (default: true)
+   - `BACKUP_DAY`: Day of week for backups (default: sunday)
+   - `BACKUP_HOUR`: Hour for backups (default: 0)
+   - `BACKUP_MINUTE`: Minute for backups (default: 0)
+   - `BACKUP_RETENTION_DAYS`: Days to keep backups (default: 30)
 
 3. **Start with Docker Compose**
    ```bash
@@ -52,6 +76,10 @@ A comprehensive wiki and knowledge management system designed for IT Managed Ser
 4. **Access the application**
    - Open http://localhost:5000
    - Create a global admin user via database or initial setup script
+
+## Docker Deployment
+
+For detailed Docker deployment instructions, including running without docker-compose, see [DOCKER.md](DOCKER.md).
 
 ## Project Structure
 
