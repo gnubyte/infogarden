@@ -196,6 +196,19 @@ def setup_backup_scheduler(app, engine):
                 replace_existing=True
             )
             
+            # Schedule export cleanup
+            try:
+                from app.modules.orgs.export_utils import cleanup_old_exports
+                scheduler.add_job(
+                    func=cleanup_old_exports,
+                    trigger=CronTrigger(hour=2, minute=0),  # Daily at 2 AM
+                    id='export_cleanup',
+                    name='Export Cleanup',
+                    replace_existing=True
+                )
+            except Exception as e:
+                logger.error(f"Error adding export cleanup job: {str(e)}")
+            
             scheduler.start()
             logger.info(f"Backup scheduler started: {backup_day} at {backup_hour:02d}:{backup_minute:02d}")
     except Exception as e:

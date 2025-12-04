@@ -3,6 +3,9 @@
 {% block title %}Edit Organization - InfoGarden{% endblock %}
 
 {% block content %}
+<!-- Quill.js CSS for rich text editing -->
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+
 <h1>Edit Organization</h1>
 
 <div class="row mt-4">
@@ -38,6 +41,47 @@
                         <input type="file" class="form-control" id="logo" name="logo" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp">
                         <small class="form-text text-muted">Accepted formats: PNG, JPG, JPEG, GIF, WEBP. Leave empty to keep current logo.</small>
                     </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Custom Quick Links</label>
+                        <div id="custom-links-container">
+                            <!-- Custom links will be added here dynamically -->
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="add-link-btn">
+                            <i class="bi bi-plus-circle"></i> Add New Link
+                        </button>
+                        <small class="form-text text-muted d-block mt-1">Add quick links that are relevant to this organization</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="must_knows" class="form-label">Must Knows</label>
+                        <small class="form-text text-muted d-block mb-2">These are services or high level notes that a user attempting to make sure the company is operational should know. Examples might be quickbook servers and how to access them.</small>
+                        <div id="must-knows-editor" style="min-height: 300px;"></div>
+                        <textarea id="must-knows-content" name="must_knows" style="display: none;">{{ org.must_knows or '' }}</textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Pinned Contacts</label>
+                        <small class="form-text text-muted d-block mb-2">Pin contacts for quick access in case of emergencies. Display name, note, phone, and email.</small>
+                        
+                        <!-- Contact Search -->
+                        <div class="mb-3 position-relative">
+                            <label for="contact-search" class="form-label small">Search and Add Contact</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="contact-search" placeholder="Type to search contacts...">
+                                <button type="button" class="btn btn-outline-primary" id="add-contact-btn">
+                                    <i class="bi bi-plus-circle"></i> Add
+                                </button>
+                            </div>
+                            <div id="contact-search-results" class="list-group mt-2" style="display: none; max-height: 200px; overflow-y: auto; position: absolute; z-index: 1000; width: calc(100% - 1.5rem); background: white; border: 1px solid #dee2e6; border-radius: 0.375rem;"></div>
+                        </div>
+                        
+                        <!-- Pinned Contacts List -->
+                        <div id="pinned-contacts-container">
+                            <!-- Pinned contacts will be added here dynamically -->
+                        </div>
+                    </div>
+                    
                     <button type="submit" class="btn btn-primary">Update</button>
                     <a href="{{ url_for('orgs.index') }}" class="btn btn-secondary">Cancel</a>
                 </form>
@@ -45,5 +89,263 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('custom-links-container');
+    const addBtn = document.getElementById('add-link-btn');
+    let linkIndex = 0;
+    
+    function addLinkRow(label = '', url = '') {
+        // Escape HTML to prevent XSS
+        const escapeHtml = function(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        };
+        
+        const row = document.createElement('div');
+        row.className = 'custom-link-row mb-2';
+        row.innerHTML = `
+            <div class="row g-2">
+                <div class="col-md-5">
+                    <input type="text" class="form-control form-control-sm" 
+                           name="custom_link_label[]" 
+                           placeholder="Link Label" 
+                           value="${escapeHtml(label)}">
+                </div>
+                <div class="col-md-6">
+                    <input type="url" class="form-control form-control-sm" 
+                           name="custom_link_url[]" 
+                           placeholder="https://example.com" 
+                           value="${escapeHtml(url)}">
+                </div>
+                <div class="col-md-1">
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-link-btn">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        container.appendChild(row);
+        
+        // Add remove functionality
+        row.querySelector('.remove-link-btn').addEventListener('click', function() {
+            row.remove();
+        });
+        
+        linkIndex++;
+    }
+    
+    // Load existing custom links
+    {% if org.custom_links and org.custom_links|length > 0 %}
+    const existingLinks = {{ org.custom_links|tojson }};
+    existingLinks.forEach(function(link) {
+        addLinkRow(link.label || '', link.url || '');
+    });
+    {% else %}
+    // Add one empty row if no existing links
+    addLinkRow();
+    {% endif %}
+    
+    addBtn.addEventListener('click', function() {
+        addLinkRow();
+    });
+    
+    // Pinned Contacts functionality
+    const contactSearch = document.getElementById('contact-search');
+    const contactSearchResults = document.getElementById('contact-search-results');
+    const addContactBtn = document.getElementById('add-contact-btn');
+    const pinnedContactsContainer = document.getElementById('pinned-contacts-container');
+    let searchTimeout = null;
+    let selectedContact = null;
+    const pinnedContactIds = new Set();
+    
+    // Load existing pinned contacts
+    {% if pinned_contacts %}
+    const existingPinnedContacts = {{ pinned_contacts|tojson }};
+    existingPinnedContacts.forEach(function(pinned) {
+        addPinnedContact(pinned.contact_id, pinned.name, pinned.email, pinned.phone, pinned.note);
+    });
+    {% endif %}
+    
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function addPinnedContact(contactId, name, email, phone, note) {
+        if (pinnedContactIds.has(contactId)) {
+            return; // Already pinned
+        }
+        pinnedContactIds.add(contactId);
+        
+        const row = document.createElement('div');
+        row.className = 'pinned-contact-row mb-2 p-2 border rounded';
+        row.setAttribute('data-contact-id', contactId);
+        row.innerHTML = `
+            <input type="hidden" name="pinned_contact_id[]" value="${contactId}">
+            <div class="row g-2">
+                <div class="col-md-12">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <strong>${escapeHtml(name)}</strong>
+                            ${email ? `<div class="small text-muted"><i class="bi bi-envelope"></i> ${escapeHtml(email)}</div>` : ''}
+                            ${phone ? `<div class="small text-muted"><i class="bi bi-telephone"></i> ${escapeHtml(phone)}</div>` : ''}
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-pinned-btn">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-12">
+                    <input type="text" class="form-control form-control-sm" 
+                           name="pinned_contact_note[]" 
+                           placeholder="Note (e.g., why this contact is pinned)" 
+                           value="${escapeHtml(note || '')}">
+                </div>
+            </div>
+        `;
+        pinnedContactsContainer.appendChild(row);
+        
+        // Add remove functionality
+        row.querySelector('.remove-pinned-btn').addEventListener('click', function() {
+            pinnedContactIds.delete(contactId);
+            row.remove();
+        });
+    }
+    
+    // Contact search functionality
+    contactSearch.addEventListener('input', function() {
+        const query = this.value.trim();
+        
+        clearTimeout(searchTimeout);
+        
+        if (query.length < 2) {
+            contactSearchResults.style.display = 'none';
+            selectedContact = null;
+            return;
+        }
+        
+        searchTimeout = setTimeout(function() {
+            fetch(`{{ url_for('contacts.search') }}?q=${encodeURIComponent(query)}&org_id={{ org.id }}`)
+                .then(response => response.json())
+                .then(data => {
+                    contactSearchResults.innerHTML = '';
+                    if (data.results && data.results.length > 0) {
+                        data.results.forEach(function(contact) {
+                            if (pinnedContactIds.has(contact.id)) {
+                                return; // Skip already pinned contacts
+                            }
+                            const item = document.createElement('a');
+                            item.href = '#';
+                            item.className = 'list-group-item list-group-item-action';
+                            item.innerHTML = `
+                                <div class="d-flex w-100 justify-content-between">
+                                    <strong>${escapeHtml(contact.name)}</strong>
+                                </div>
+                                ${contact.email ? `<small class="text-muted">${escapeHtml(contact.email)}</small>` : ''}
+                                ${contact.phone ? `<small class="text-muted d-block">${escapeHtml(contact.phone)}</small>` : ''}
+                            `;
+                            item.addEventListener('click', function(e) {
+                                e.preventDefault();
+                                selectedContact = contact;
+                                contactSearch.value = contact.name;
+                                contactSearchResults.style.display = 'none';
+                            });
+                            contactSearchResults.appendChild(item);
+                        });
+                        contactSearchResults.style.display = 'block';
+                    } else {
+                        contactSearchResults.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error searching contacts:', error);
+                    contactSearchResults.style.display = 'none';
+                });
+        }, 300);
+    });
+    
+    // Add contact button
+    addContactBtn.addEventListener('click', function() {
+        if (selectedContact && !pinnedContactIds.has(selectedContact.id)) {
+            addPinnedContact(selectedContact.id, selectedContact.name, selectedContact.email || '', selectedContact.phone || '', '');
+            contactSearch.value = '';
+            selectedContact = null;
+            contactSearchResults.style.display = 'none';
+        }
+    });
+    
+    // Hide search results when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!contactSearch.contains(e.target) && !contactSearchResults.contains(e.target)) {
+            contactSearchResults.style.display = 'none';
+        }
+    });
+});
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+<script>
+// Initialize Quill rich text editor for must_knows after Quill is loaded
+(function() {
+    function initQuill() {
+        if (typeof Quill === 'undefined') {
+            setTimeout(initQuill, 50);
+            return;
+        }
+        
+        const mustKnowsEditor = document.getElementById('must-knows-editor');
+        const mustKnowsContent = document.getElementById('must-knows-content');
+        
+        if (mustKnowsEditor && mustKnowsContent) {
+            const quill = new Quill('#must-knows-editor', {
+                theme: 'snow',
+                modules: {
+                    toolbar: [
+                        [{ 'header': [1, 2, 3, false] }],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        [{ 'color': [] }, { 'background': [] }],
+                        ['link'],
+                        ['clean']
+                    ]
+                }
+            });
+            
+            // Load existing content
+            if (mustKnowsContent.value) {
+                quill.root.innerHTML = mustKnowsContent.value;
+            }
+            
+            // Update hidden textarea on content change
+            quill.on('text-change', function() {
+                mustKnowsContent.value = quill.root.innerHTML;
+            });
+            
+            // Update hidden textarea before form submit
+            const form = mustKnowsEditor.closest('form');
+            if (form) {
+                form.addEventListener('submit', function() {
+                    mustKnowsContent.value = quill.root.innerHTML;
+                });
+            }
+        }
+    }
+    
+    // Start initialization - check if DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initQuill);
+    } else {
+        // DOM is already ready, start initialization
+        initQuill();
+    }
+})();
+</script>
 {% endblock %}
 

@@ -39,7 +39,39 @@
         <h5 class="mb-3">Actions</h5>
         <a href="{{ url_for('docs.edit', doc_id=doc.id) }}" class="btn btn-primary">Edit</a>
         <a href="{{ url_for('docs.export_pdf', doc_id=doc.id) }}" class="btn btn-success">Export PDF</a>
+        <a href="{{ url_for('docs.export_word', doc_id=doc.id) }}" class="btn btn-info">Export Word</a>
+        <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#emailDocumentModal">Email Document</button>
         <a href="{{ url_for('docs.index') }}" class="btn btn-secondary">Back</a>
+    </div>
+    
+    <!-- Email Document Modal -->
+    <div class="modal fade" id="emailDocumentModal" tabindex="-1" aria-labelledby="emailDocumentModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="emailDocumentModalLabel">Email Document</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="emailDocumentForm">
+                    <div class="modal-body">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="mb-3">
+                            <label for="recipient_email" class="form-label">Recipient Email Address *</label>
+                            <input type="email" class="form-control" id="recipient_email" name="recipient_email" required>
+                            <div id="email_domain_error" class="text-danger mt-1" style="display: none;"></div>
+                            <small class="form-text text-muted" id="domain_restriction_hint" style="display: none;"></small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="sendEmailBtn">
+                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                            Send Email
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -88,6 +120,175 @@
         overflow-x: auto;
         margin: 1rem 0;
     }
+    /* Table of Contents styling */
+    .table-of-contents {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    .table-of-contents h2 {
+        margin-top: 0;
+        margin-bottom: 0.75rem;
+        font-size: 1.25rem;
+    }
+    .table-of-contents ul {
+        list-style-type: none;
+        padding-left: 0;
+        margin-bottom: 0;
+    }
+    .table-of-contents li {
+        margin-bottom: 0.5rem;
+    }
+    .table-of-contents li a {
+        color: #007bff;
+        text-decoration: none;
+    }
+    .table-of-contents li a:hover {
+        text-decoration: underline;
+    }
+    .table-of-contents li li {
+        margin-left: 1.5rem;
+        margin-top: 0.25rem;
+    }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Get email domain restriction settings
+    let emailDomainRestrictionEnabled = false;
+    let emailDomainRestriction = '';
+    
+    // Fetch settings on page load
+    fetch('{{ url_for("core_auth.get_email_restriction_settings") }}')
+        .then(response => response.json())
+        .then(data => {
+            emailDomainRestrictionEnabled = data.enabled || false;
+            emailDomainRestriction = data.domain || '';
+            
+            // Show hint if restriction is enabled
+            if (emailDomainRestrictionEnabled && emailDomainRestriction) {
+                const hint = document.getElementById('domain_restriction_hint');
+                hint.textContent = `Only emails from @${emailDomainRestriction} are allowed.`;
+                hint.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching email restriction settings:', error);
+        });
+    
+    // Email form handler
+    document.getElementById('emailDocumentForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const form = e.target;
+        const emailInput = document.getElementById('recipient_email');
+        const sendBtn = document.getElementById('sendEmailBtn');
+        const spinner = sendBtn.querySelector('.spinner-border');
+        const errorDiv = document.getElementById('email_domain_error');
+        const email = emailInput.value.trim();
+        
+        // Clear previous errors
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+        emailInput.classList.remove('is-invalid');
+        
+        // Validate email format
+        if (!email) {
+            errorDiv.textContent = 'Email address is required';
+            errorDiv.style.display = 'block';
+            emailInput.classList.add('is-invalid');
+            return;
+        }
+        
+        // Validate domain restriction if enabled
+        if (emailDomainRestrictionEnabled && emailDomainRestriction) {
+            const emailDomain = email.split('@')[1];
+            if (!emailDomain || emailDomain.toLowerCase() !== emailDomainRestriction.toLowerCase()) {
+                errorDiv.textContent = `Only emails from @${emailDomainRestriction} are allowed.`;
+                errorDiv.style.display = 'block';
+                emailInput.classList.add('is-invalid');
+                return;
+            }
+        }
+        
+        // Disable button and show spinner
+        sendBtn.disabled = true;
+        spinner.classList.remove('d-none');
+        sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Sending...';
+        
+        // Collect form data
+        const formData = new FormData();
+        formData.append('csrf_token', form.querySelector('input[name="csrf_token"]').value);
+        formData.append('recipient_email', email);
+        
+        // Send email
+        fetch('{{ url_for("docs.email_document", doc_id=doc.id) }}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Re-enable button
+            sendBtn.disabled = false;
+            spinner.classList.add('d-none');
+            sendBtn.innerHTML = 'Send Email';
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('emailDocumentModal'));
+            if (modal) {
+                modal.hide();
+            }
+            
+            // Clear form
+            emailInput.value = '';
+            
+            // Show toast notification
+            if (data.success) {
+                if (window.showToast) {
+                    showToast('success', 'Email Sent', data.message || 'Document sent successfully');
+                }
+            } else {
+                if (window.showToast) {
+                    showToast('danger', 'Email Failed', data.message || 'Failed to send email');
+                }
+            }
+        })
+        .catch(error => {
+            // Re-enable button
+            sendBtn.disabled = false;
+            spinner.classList.add('d-none');
+            sendBtn.innerHTML = 'Send Email';
+            
+            // Show error toast
+            if (window.showToast) {
+                showToast('danger', 'Error', 'An error occurred while sending email: ' + error.message);
+            }
+        });
+    });
+    
+    // Validate email on input if domain restriction is enabled
+    document.getElementById('recipient_email').addEventListener('input', function() {
+        const email = this.value.trim();
+        const errorDiv = document.getElementById('email_domain_error');
+        
+        if (emailDomainRestrictionEnabled && emailDomainRestriction && email) {
+            const emailDomain = email.split('@')[1];
+            if (emailDomain && emailDomain.toLowerCase() !== emailDomainRestriction.toLowerCase()) {
+                errorDiv.textContent = `Only emails from @${emailDomainRestriction} are allowed.`;
+                errorDiv.style.display = 'block';
+                this.classList.add('is-invalid');
+            } else {
+                errorDiv.style.display = 'none';
+                this.classList.remove('is-invalid');
+            }
+        } else {
+            errorDiv.style.display = 'none';
+            this.classList.remove('is-invalid');
+        }
+    });
+</script>
 {% endblock %}
 

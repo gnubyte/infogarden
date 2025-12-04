@@ -20,6 +20,8 @@ def create_app():
     
     # Ensure directories exist
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'software'), exist_ok=True)
+    os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'exports'), exist_ok=True)
     os.makedirs(app.config['BACKUP_FOLDER'], exist_ok=True)
     
     # Initialize extensions
@@ -37,7 +39,7 @@ def create_app():
     from app.core import models as core_models
     
     # Import module models to ensure all relationships can be resolved
-    from app.modules.docs.models import Document
+    from app.modules.docs.models import Document, DocumentFolder, Software
     from app.modules.contacts.models import Contact
     from app.modules.passwords.models import PasswordEntry
     
@@ -93,7 +95,7 @@ def create_app():
         
         return dict(current_org=org, brand_name=brand_name, brand_logo=brand_logo)
     
-    # Setup scheduled backups
+    # Setup scheduled backups and export cleanup
     from app.core.backup import setup_backup_scheduler
     setup_backup_scheduler(app, db_engine)
     

@@ -10,7 +10,7 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
     BACKUP_FOLDER = os.path.join(os.path.dirname(__file__), 'backups')
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
+    MAX_CONTENT_LENGTH = 2 * 1024 * 1024 * 1024  # 2GB for software uploads
     ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY', '')
     
     # Backup settings (defaults)

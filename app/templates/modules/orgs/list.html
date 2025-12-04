@@ -46,9 +46,10 @@
                             </td>
                             <td>{{ org.created_at.strftime('%Y-%m-%d') if org.created_at else '-' }}</td>
                             <td>
+                                <a href="{{ url_for('orgs.view', org_id=org.id) }}" class="btn btn-sm btn-info">View Details</a>
                                 <form method="POST" action="{{ url_for('orgs.switch', org_id=org.id) }}" style="display: inline;">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-sm btn-info">Switch</button>
+                                    <button type="submit" class="btn btn-sm btn-secondary">Switch</button>
                                 </form>
                                 <a href="{{ url_for('orgs.edit', org_id=org.id) }}" class="btn btn-sm btn-primary">Edit</a>
                                 <form method="POST" action="{{ url_for('orgs.delete', org_id=org.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure?');">

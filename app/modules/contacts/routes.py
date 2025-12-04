@@ -32,7 +32,7 @@ def index():
     from app.modules.docs.models import Document
     from app.modules.passwords.models import PasswordEntry
     documents = Document.query.filter_by(org_id=org_id).order_by(Document.title).all()
-    doc_tree = build_document_tree(documents)
+    doc_tree = build_document_tree(documents, org_id)
     passwords = PasswordEntry.query.filter_by(org_id=org_id).order_by(PasswordEntry.title).all()
     
     log_activity('view', 'contact', None)
@@ -119,4 +119,39 @@ def delete(contact_id):
     log_activity('delete', 'contact', contact_id)
     flash('Contact deleted successfully', 'success')
     return redirect(url_for('contacts.index'))
+
+@bp.route('/search')
+@login_required
+def search():
+    """Search contacts (for autocomplete)"""
+    from flask import jsonify
+    query = request.args.get('q', '').strip()
+    org_id = request.args.get('org_id', type=int)
+    
+    if not org_id:
+        org_id = session.get('current_org_id') or current_user.org_id
+    
+    if not org_id:
+        return jsonify({'results': []})
+    
+    if not current_user.can_access_org(org_id):
+        return jsonify({'results': []})
+    
+    if len(query) < 2:
+        return jsonify({'results': []})
+    
+    contacts = Contact.query.filter(
+        Contact.org_id == org_id,
+        Contact.name.ilike(f'%{query}%')
+    ).limit(20).all()
+    
+    results = [{
+        'id': contact.id,
+        'name': contact.name,
+        'email': contact.email or '',
+        'phone': contact.phone or '',
+        'role': contact.role or ''
+    } for contact in contacts]
+    
+    return jsonify({'results': results})
 

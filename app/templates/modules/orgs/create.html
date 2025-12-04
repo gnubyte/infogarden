@@ -32,6 +32,18 @@
                         <input type="file" class="form-control" id="logo" name="logo" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp">
                         <small class="form-text text-muted">Accepted formats: PNG, JPG, JPEG, GIF, WEBP</small>
                     </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Custom Quick Links</label>
+                        <div id="custom-links-container">
+                            <!-- Custom links will be added here dynamically -->
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="add-link-btn">
+                            <i class="bi bi-plus-circle"></i> Add New Link
+                        </button>
+                        <small class="form-text text-muted d-block mt-1">Add quick links that are relevant to this organization</small>
+                    </div>
+                    
                     <button type="submit" class="btn btn-primary">Create</button>
                     <a href="{{ url_for('orgs.index') }}" class="btn btn-secondary">Cancel</a>
                 </form>
@@ -39,5 +51,61 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('custom-links-container');
+    const addBtn = document.getElementById('add-link-btn');
+    let linkIndex = 0;
+    
+    function addLinkRow(label = '', url = '') {
+        // Escape HTML to prevent XSS
+        const escapeHtml = function(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        };
+        
+        const row = document.createElement('div');
+        row.className = 'custom-link-row mb-2';
+        row.innerHTML = `
+            <div class="row g-2">
+                <div class="col-md-5">
+                    <input type="text" class="form-control form-control-sm" 
+                           name="custom_link_label[]" 
+                           placeholder="Link Label" 
+                           value="${escapeHtml(label)}">
+                </div>
+                <div class="col-md-6">
+                    <input type="url" class="form-control form-control-sm" 
+                           name="custom_link_url[]" 
+                           placeholder="https://example.com" 
+                           value="${escapeHtml(url)}">
+                </div>
+                <div class="col-md-1">
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-link-btn">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        container.appendChild(row);
+        
+        // Add remove functionality
+        row.querySelector('.remove-link-btn').addEventListener('click', function() {
+            row.remove();
+        });
+        
+        linkIndex++;
+    }
+    
+    addBtn.addEventListener('click', function() {
+        addLinkRow();
+    });
+    
+    // Add one empty row by default
+    addLinkRow();
+});
+</script>
 {% endblock %}
 

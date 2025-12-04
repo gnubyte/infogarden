@@ -20,14 +20,29 @@
                         <input type="text" class="form-control" id="title" name="title" value="{{ doc.title }}" required>
                     </div>
                     <div class="mb-3">
+                        <label for="folder_id" class="form-label">Folder</label>
+                        <select class="form-select" id="folder_id" name="folder_id">
+                            <option value="None" {{ 'selected' if not doc.folder_id else '' }}>None (Root)</option>
+                            {% for folder in folders %}
+                                <option value="{{ folder.id }}" {{ 'selected' if doc.folder_id == folder.id else '' }}>{{ folder.get_path() }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">Select a folder to organize this document</small>
+                    </div>
+                    <div class="mb-3">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <div>
                                 <label for="content" class="form-label mb-0">Content</label>
                                 <small class="text-muted d-block">Document Type: <strong>{{ 'Rich Text' if doc.content_type == 'html' else 'Markdown' }}</strong></small>
                             </div>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="preview-btn" style="{{ 'display: block;' if doc.content_type == 'html' else 'display: none;' }}">
-                                <span id="preview-btn-text">Preview</span>
-                            </button>
+                            <div>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="toc-btn" title="Insert Table of Contents">
+                                    <span>📑 Insert TOC</span>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="preview-btn" style="{{ 'display: block;' if doc.content_type == 'html' else 'display: none;' }}">
+                                    <span id="preview-btn-text">Preview</span>
+                                </button>
+                            </div>
                         </div>
                         <div id="markdown-editor-container" style="{{ 'display: none;' if doc.content_type == 'html' else '' }}">
                             <textarea class="form-control" id="content" name="content" rows="20">{% if doc.content_type == 'markdown' %}{{ doc.content or '' }}{% endif %}</textarea>
@@ -35,6 +50,9 @@
                         <div id="richtext-editor-container" style="{{ 'display: block;' if doc.content_type == 'html' else 'display: none;' }}">
                             <div id="richtext-editor" style="min-height: 400px;"></div>
                             <textarea id="richtext-content" name="content" style="display: none;">{{ doc.content or '' if doc.content_type == 'html' else '' }}</textarea>
+                            {% if doc.content_type == 'html' %}
+                            <script type="application/json" id="original-content-data">{{ (doc.content or '')|tojson }}</script>
+                            {% endif %}
                         </div>
                         <div id="preview-container" style="display: none; margin-top: 1rem;">
                             <div class="card">
@@ -68,6 +86,36 @@
     let currentEditorType = '{{ doc.content_type or "markdown" }}';
     const originalContentType = '{{ doc.content_type or "markdown" }}';
     
+    // Helper function to upload image
+    function uploadImageToServer(file, callback) {
+        const formData = new FormData();
+        formData.append('image', file);
+        const csrfToken = document.querySelector('input[name="csrf_token"]');
+        if (csrfToken) {
+            formData.append('csrf_token', csrfToken.value);
+        }
+        
+        fetch('{{ url_for("docs.upload_image") }}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Upload failed');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.url && callback) {
+                callback(data.url);
+            }
+        })
+        .catch(error => {
+            alert('Image upload failed: ' + error.message);
+            if (callback) callback(null);
+        });
+    }
+    
     // Initialize Quill rich text editor
     function initQuill() {
         quill = new Quill('#richtext-editor', {
@@ -85,10 +133,32 @@
             }
         });
         
-        // Set initial content if HTML
-        {% if doc.content_type == 'html' and doc.content %}
-        quill.root.innerHTML = {{ doc.content|tojson }};
-        {% endif %}
+        // Make quill globally accessible
+        window.quill = quill;
+        
+        // Get toolbar module for later use
+        const toolbar = quill.getModule('toolbar');
+        
+        // Add TOC button to Quill toolbar
+        try {
+            const container = toolbar.container;
+            const tocButton = document.createElement('span');
+            tocButton.className = 'ql-formats';
+            const button = document.createElement('button');
+            button.className = 'ql-toc';
+            button.setAttribute('type', 'button');
+            button.innerHTML = '<svg viewBox="0 0 18 18"><rect class="ql-stroke" height="12" width="12" x="3" y="3"></rect><line class="ql-stroke" x1="7" x2="11" y1="7" y2="7"></line><line class="ql-stroke" x1="7" x2="11" y1="9" y2="9"></line><line class="ql-stroke" x1="7" x2="11" y1="11" y2="11"></line></svg>';
+            button.title = 'Insert Table of Contents';
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                insertHtmlTOC();
+            });
+            tocButton.appendChild(button);
+            // Append to the end of the toolbar
+            container.appendChild(tocButton);
+        } catch (error) {
+            console.error('Error adding TOC button:', error);
+        }
         
         // Handle clipboard paste for images
         const editorElement = document.querySelector('#richtext-editor');
@@ -112,32 +182,173 @@
             }
         });
         
-        // Handle image upload in Quill toolbar
-        const toolbar = quill.getModule('toolbar');
-        toolbar.addHandler('image', function() {
-            const input = document.createElement('input');
-            input.setAttribute('type', 'file');
-            input.setAttribute('accept', 'image/png, image/jpeg, image/gif, image/webp');
-            input.click();
+        // Handle image upload in Quill toolbar - intercept click on image button
+        const imageButton = toolbar.container.querySelector('.ql-image');
+        if (imageButton) {
+            imageButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                const input = document.createElement('input');
+                input.setAttribute('type', 'file');
+                input.setAttribute('accept', 'image/png, image/jpeg, image/gif, image/webp');
+                input.click();
+                
+                input.onchange = function() {
+                    const file = input.files[0];
+                    if (!file) return;
+                    uploadImageToServer(file, function(url) {
+                        if (url) {
+                            const range = quill.getSelection(true);
+                            if (!range) {
+                                range = { index: quill.getLength(), length: 0 };
+                            }
+                            quill.insertEmbed(range.index, 'image', url);
+                            quill.setSelection(range.index + 1);
+                        }
+                    });
+                };
+            });
+        }
+        
+        // Convert base64 images to uploaded files
+        function convertBase64Images() {
+            const html = quill.root.innerHTML;
+            const imgRegex = /<img[^>]+src="(data:image\/[^"]+)"[^>]*>/g;
+            let match;
+            const base64Images = [];
             
-            input.onchange = function() {
-                const file = input.files[0];
-                if (!file) return;
+            while ((match = imgRegex.exec(html)) !== null) {
+                const dataUrl = match[1];
+                if (dataUrl.startsWith('data:image/')) {
+                    base64Images.push({
+                        fullMatch: match[0],
+                        dataUrl: dataUrl
+                    });
+                }
+            }
+            
+            if (base64Images.length === 0) {
+                return; // No base64 images found
+            }
+            
+            // Process each base64 image
+            base64Images.forEach((imgData, index) => {
+                const dataUrl = imgData.dataUrl;
+                const base64Data = dataUrl.split(',')[1];
+                const mimeMatch = dataUrl.match(/data:image\/([^;]+)/);
+                const mimeType = mimeMatch ? mimeMatch[1] : 'png';
+                const extension = mimeType === 'jpeg' ? 'jpg' : mimeType;
+                
+                // Convert base64 to blob
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: `image/${mimeType}` });
+                
+                // Create a file from the blob
+                const file = new File([blob], `image_${Date.now()}_${index}.${extension}`, { type: `image/${mimeType}` });
+                
+                // Upload the file
                 uploadImageToServer(file, function(url) {
                     if (url) {
-                        const range = quill.getSelection();
-                        quill.insertEmbed(range.index, 'image', url);
+                        // Replace the base64 image with the uploaded URL directly in HTML
+                        // This avoids clipboard conversion which can strip characters
+                        const newHtml = quill.root.innerHTML.replace(imgData.fullMatch, imgData.fullMatch.replace(dataUrl, url));
+                        quill.root.innerHTML = newHtml;
                     }
                 });
-            };
+            });
+        }
+        
+        // Monitor for base64 images and convert them
+        quill.on('text-change', function() {
+            // Skip processing if we're still loading initial content
+            if (quill._isLoadingContent) {
+                return;
+            }
+            // Use a small delay to avoid processing during rapid changes
+            clearTimeout(quill.base64ConversionTimeout);
+            quill.base64ConversionTimeout = setTimeout(convertBase64Images, 500);
         });
+        
+        // Load initial content AFTER all event handlers are set up
+        // Use a delay to ensure Quill is fully initialized
+        {% if doc.content_type == 'html' %}
+        setTimeout(function() {
+            // Get content from JSON script tag (preserves exact content without escaping issues)
+            const contentScript = document.getElementById('original-content-data');
+            let initialContent = '';
+            if (contentScript) {
+                try {
+                    initialContent = JSON.parse(contentScript.textContent);
+                } catch (e) {
+                    console.error('Failed to parse original content:', e);
+                    // Fallback to textarea value
+                    const hiddenTextarea = document.getElementById('richtext-content');
+                    if (hiddenTextarea) {
+                        initialContent = hiddenTextarea.value.trim();
+                    }
+                }
+            } else {
+                // Fallback to textarea value
+                const hiddenTextarea = document.getElementById('richtext-content');
+                if (hiddenTextarea) {
+                    initialContent = hiddenTextarea.value.trim();
+                }
+            }
+            
+            if (initialContent && initialContent !== '<p><br></p>' && initialContent !== '') {
+                // Set a flag to prevent text-change handlers from interfering
+                quill._isLoadingContent = true;
+                // Store original content for comparison
+                quill._originalContent = initialContent;
+                // Use direct innerHTML assignment - this works when done manually
+                quill.root.innerHTML = initialContent;
+                // Force multiple restores to ensure content sticks
+                let attempts = 0;
+                const maxAttempts = 30;
+                const restoreInterval = setInterval(function() {
+                    const currentContent = quill.root.innerHTML;
+                    // Compare both length and actual content to catch any modifications
+                    if (currentContent.length < initialContent.length || 
+                        (currentContent.length === initialContent.length && currentContent !== initialContent && 
+                         currentContent.substring(0, 50) !== initialContent.substring(0, 50))) {
+                        quill.root.innerHTML = initialContent;
+                    }
+                    attempts++;
+                    if (attempts >= maxAttempts) {
+                        clearInterval(restoreInterval);
+                        quill._isLoadingContent = false;
+                        // Final check and restore
+                        const finalContent = quill.root.innerHTML;
+                        if (finalContent.length < initialContent.length || 
+                            (finalContent.length === initialContent.length && finalContent !== initialContent)) {
+                            quill.root.innerHTML = initialContent;
+                        }
+                        delete quill._originalContent;
+                    }
+                }, 100);
+            }
+        }, 500);
+        {% endif %}
+        
     }
     
     // Wait for EasyMDE to load
     function initEasyMDE() {
         if (typeof EasyMDE !== 'undefined') {
-            const easyMDE = new EasyMDE({
-                element: document.getElementById('content'),
+            const contentTextarea = document.getElementById('content');
+            // Ensure content is set before initializing EasyMDE
+            {% if doc.content_type == 'markdown' %}
+            if (contentTextarea && !contentTextarea.value) {
+                contentTextarea.value = {{ (doc.content or '')|tojson }};
+            }
+            {% endif %}
+            
+            easyMDE = new EasyMDE({
+                element: contentTextarea,
                 spellChecker: false,
                 uploadImage: true,
                 imageUploadEndpoint: '{{ url_for("docs.upload_image") }}',
@@ -168,6 +379,15 @@
                     'heading-1', 'heading-2', 'heading-3', '|',
                     'code', 'quote', 'unordered-list', 'ordered-list', '|',
                     'link', 'image', 'table', '|',
+                    {
+                        name: 'toc',
+                        action: function() {
+                            insertMarkdownTOC();
+                        },
+                        className: 'fa fa-list',
+                        title: 'Insert Table of Contents'
+                    },
+                    '|',
                     'preview', 'side-by-side', 'fullscreen', '|',
                     'guide'
                 ]
@@ -246,20 +466,370 @@
         initEasyMDE();
     }
     
+    // Helper function to convert base64 images to uploaded URLs (synchronous wait)
+    function convertBase64ImagesSync(html) {
+        return new Promise((resolve, reject) => {
+            const imgRegex = /<img[^>]+src="(data:image\/[^"]+)"[^>]*>/g;
+            let match;
+            const base64Images = [];
+            let htmlCopy = html;
+            
+            // Find all base64 images
+            while ((match = imgRegex.exec(html)) !== null) {
+                const dataUrl = match[1];
+                if (dataUrl.startsWith('data:image/')) {
+                    base64Images.push({
+                        fullMatch: match[0],
+                        dataUrl: dataUrl,
+                        index: match.index
+                    });
+                }
+            }
+            
+            if (base64Images.length === 0) {
+                resolve(html);
+                return;
+            }
+            
+            // Process images in reverse order to maintain indices
+            base64Images.reverse();
+            let processed = 0;
+            let hasError = false;
+            
+            base64Images.forEach((imgData, index) => {
+                const dataUrl = imgData.dataUrl;
+                const base64Data = dataUrl.split(',')[1];
+                const mimeMatch = dataUrl.match(/data:image\/([^;]+)/);
+                const mimeType = mimeMatch ? mimeMatch[1] : 'png';
+                const extension = mimeType === 'jpeg' ? 'jpg' : mimeType;
+                
+                try {
+                    // Convert base64 to blob
+                    const byteCharacters = atob(base64Data);
+                    const byteNumbers = new Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+                    const byteArray = new Uint8Array(byteNumbers);
+                    const blob = new Blob([byteArray], { type: `image/${mimeType}` });
+                    
+                    // Create a file from the blob
+                    const file = new File([blob], `image_${Date.now()}_${index}.${extension}`, { type: `image/${mimeType}` });
+                    
+                    // Upload the file
+                    uploadImageToServer(file, function(url) {
+                        if (hasError) return;
+                        
+                        if (url) {
+                            // Replace the specific occurrence
+                            htmlCopy = htmlCopy.replace(imgData.fullMatch, imgData.fullMatch.replace(dataUrl, url));
+                        } else {
+                            hasError = true;
+                            reject(new Error('Failed to upload one or more images'));
+                            return;
+                        }
+                        
+                        processed++;
+                        if (processed === base64Images.length) {
+                            resolve(htmlCopy);
+                        }
+                    });
+                } catch (error) {
+                    hasError = true;
+                    reject(new Error('Failed to process image: ' + error.message));
+                }
+            });
+        });
+    }
+    
     // Handle form submission - sync content
-    document.getElementById('doc-form').addEventListener('submit', function(e) {
+    const form = document.getElementById('doc-form');
+    const submitHandler = function(e) {
+        e.preventDefault(); // Prevent default submission
+        
         const contentType = '{{ doc.content_type or "markdown" }}';
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
         
         if (contentType === 'html' && quill) {
-            // Get HTML from Quill and put it in hidden textarea
-            const htmlContent = quill.root.innerHTML;
-            document.getElementById('richtext-content').value = htmlContent;
-            // Also update the main content field
-            document.getElementById('content').value = htmlContent;
+            // Get HTML from Quill
+            let htmlContent = quill.root.innerHTML;
+            
+            // Check for base64 images and convert them
+            if (htmlContent.includes('data:image/')) {
+                // Show loading message
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Uploading images...';
+                
+                convertBase64ImagesSync(htmlContent)
+                    .then(function(convertedHtml) {
+                        // Double-check no base64 images remain
+                        if (convertedHtml.includes('data:image/')) {
+                            alert('Some images failed to upload. Please try again or remove the images.');
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = originalText;
+                            return;
+                        }
+                        
+                        document.getElementById('richtext-content').value = convertedHtml;
+                        document.getElementById('content').value = convertedHtml;
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                        // Remove the event listener temporarily and submit
+                        form.removeEventListener('submit', submitHandler);
+                        form.submit();
+                    })
+                    .catch(function(error) {
+                        alert('Error uploading images: ' + error.message);
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                    });
+            } else {
+                // No base64 images, proceed normally
+                document.getElementById('richtext-content').value = htmlContent;
+                document.getElementById('content').value = htmlContent;
+                form.removeEventListener('submit', submitHandler);
+                form.submit();
+            }
         } else if (contentType === 'markdown' && easyMDE) {
             // Get markdown from EasyMDE
             const markdownContent = easyMDE.value();
             document.getElementById('content').value = markdownContent;
+            form.removeEventListener('submit', submitHandler);
+            form.submit();
+        } else {
+            form.removeEventListener('submit', submitHandler);
+            form.submit();
+        }
+    };
+    form.addEventListener('submit', submitHandler);
+    
+    // Generate markdown TOC from headings
+    function generateMarkdownTOC(content) {
+        const lines = content.split('\n');
+        const headings = [];
+        const headingCounts = {};
+        
+        lines.forEach((line, index) => {
+            const match = line.match(/^(#{1,6})\s+(.+)$/);
+            if (match) {
+                const level = match[1].length;
+                const text = match[2].trim();
+                // Create anchor from heading text
+                const anchor = text.toLowerCase()
+                    .replace(/[^\w\s-]/g, '')
+                    .replace(/\s+/g, '-')
+                    .replace(/-+/g, '-')
+                    .trim();
+                
+                // Handle duplicate anchors
+                const baseAnchor = anchor;
+                let finalAnchor = baseAnchor;
+                if (headingCounts[baseAnchor]) {
+                    headingCounts[baseAnchor]++;
+                    finalAnchor = `${baseAnchor}-${headingCounts[baseAnchor]}`;
+                } else {
+                    headingCounts[baseAnchor] = 0;
+                }
+                
+                headings.push({
+                    level: level,
+                    text: text,
+                    anchor: finalAnchor
+                });
+            }
+        });
+        
+        if (headings.length === 0) {
+            return null;
+        }
+        
+        // Generate TOC markdown
+        let toc = '## Table of Contents\n\n';
+        headings.forEach(heading => {
+            const indent = '  '.repeat(heading.level - 1);
+            toc += `${indent}- [${heading.text}](#${heading.anchor})\n`;
+        });
+        toc += '\n';
+        
+        return toc;
+    }
+    
+    // Insert markdown TOC at cursor position
+    function insertMarkdownTOC() {
+        if (!easyMDE) {
+            alert('Markdown editor not initialized');
+            return;
+        }
+        
+        const content = easyMDE.value();
+        const toc = generateMarkdownTOC(content);
+        
+        if (!toc) {
+            alert('No headings found in the document. Add some headings first.');
+            return;
+        }
+        
+        // Get cursor position
+        const cursor = easyMDE.codemirror.getCursor();
+        const line = cursor.line;
+        
+        // Insert TOC at cursor position
+        easyMDE.codemirror.replaceRange(toc, cursor);
+    }
+    
+    // Generate HTML TOC from headings
+    function generateHtmlTOC(htmlContent) {
+        // Create a temporary DOM element to parse HTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = htmlContent;
+        
+        const headings = tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        
+        if (headings.length === 0) {
+            return null;
+        }
+        
+        // Generate TOC HTML with proper nesting
+        let tocHtml = '<div class="table-of-contents">\n';
+        tocHtml += '<h2>Table of Contents</h2>\n';
+        
+        let tocStructure = [];
+        
+        headings.forEach((heading) => {
+            const level = parseInt(heading.tagName.substring(1));
+            const text = heading.textContent.trim();
+            const anchor = heading.id || text.toLowerCase()
+                .replace(/[^\w\s-]/g, '')
+                .replace(/\s+/g, '-')
+                .replace(/-+/g, '-')
+                .trim();
+            
+            tocStructure.push({ level, text, anchor });
+        });
+        
+        // Build nested list structure
+        let html = '<ul>\n';
+        let prevLevel = 0;
+        
+        tocStructure.forEach((item, index) => {
+            const nextItem = tocStructure[index + 1];
+            const nextLevel = nextItem ? nextItem.level : 0;
+            
+            // Close previous list items if going up levels
+            if (item.level < prevLevel) {
+                for (let i = prevLevel; i > item.level; i--) {
+                    html += '</ul>\n</li>\n';
+                }
+            }
+            
+            // Open new list item
+            html += '<li><a href="#' + item.anchor + '">' + item.text + '</a>';
+            
+            // Check if this item has children
+            if (nextItem && nextItem.level > item.level) {
+                html += '\n<ul>\n';
+            } else {
+                html += '</li>\n';
+            }
+            
+            prevLevel = item.level;
+        });
+        
+        // Close remaining tags
+        for (let i = prevLevel; i > 0; i--) {
+            html += '</ul>\n</li>\n';
+        }
+        
+        html += '</ul>\n';
+        tocHtml += html;
+        tocHtml += '</div>\n';
+        
+        return tocHtml;
+    }
+    
+    // Insert HTML TOC at cursor position
+    function insertHtmlTOC() {
+        if (!quill) {
+            alert('Rich text editor not initialized');
+            return;
+        }
+        
+        const htmlContent = quill.root.innerHTML;
+        
+        // First, add IDs to headings in the editor
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = htmlContent;
+        const headings = tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        const headingCounts = {};
+        
+        if (headings.length === 0) {
+            alert('No headings found in the document. Add some headings first.');
+            return;
+        }
+        
+        // Update headings in Quill with IDs
+        const quillHeadings = quill.root.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        let headingIndex = 0;
+        
+        headings.forEach((heading) => {
+            const text = heading.textContent.trim();
+            const anchor = text.toLowerCase()
+                .replace(/[^\w\s-]/g, '')
+                .replace(/\s+/g, '-')
+                .replace(/-+/g, '-')
+                .trim();
+            
+            const baseAnchor = anchor;
+            let finalAnchor = baseAnchor;
+            if (headingCounts[baseAnchor]) {
+                headingCounts[baseAnchor]++;
+                finalAnchor = `${baseAnchor}-${headingCounts[baseAnchor]}`;
+            } else {
+                headingCounts[baseAnchor] = 0;
+            }
+            
+            // Find the corresponding heading in Quill and add ID
+            if (headingIndex < quillHeadings.length) {
+                const quillHeading = quillHeadings[headingIndex];
+                if (quillHeading.textContent.trim() === text && !quillHeading.id) {
+                    quillHeading.id = finalAnchor;
+                    headingIndex++;
+                }
+            }
+        });
+        
+        // Generate TOC
+        const toc = generateHtmlTOC(quill.root.innerHTML);
+        
+        if (!toc) {
+            alert('No headings found in the document. Add some headings first.');
+            return;
+        }
+        
+        // Get cursor position
+        const range = quill.getSelection(true);
+        const insertIndex = range ? range.index : 0;
+        
+        // Insert TOC as HTML at cursor position
+        const Delta = Quill.import('delta');
+        const tocDelta = quill.clipboard.convert({ html: toc });
+        const insertDelta = new Delta().retain(insertIndex).concat(tocDelta);
+        quill.updateContents(insertDelta, 'user');
+        
+        // Move cursor after TOC
+        const tocLength = tocDelta.length();
+        quill.setSelection(insertIndex + tocLength, 'silent');
+    }
+    
+    // Handle TOC button click (for both editors)
+    document.getElementById('toc-btn').addEventListener('click', function() {
+        if (currentEditorType === 'markdown' && easyMDE) {
+            insertMarkdownTOC();
+        } else if (currentEditorType === 'html' && quill) {
+            insertHtmlTOC();
+        } else {
+            alert('Editor not ready. Please wait a moment and try again.');
         }
     });
     
@@ -564,6 +1134,63 @@
         border-radius: 5px;
         overflow-x: auto;
         margin: 1rem 0;
+    }
+    /* Table of Contents styling */
+    .table-of-contents {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    .table-of-contents h2 {
+        margin-top: 0;
+        margin-bottom: 0.75rem;
+        font-size: 1.25rem;
+    }
+    .table-of-contents ul {
+        list-style-type: none;
+        padding-left: 0;
+        margin-bottom: 0;
+    }
+    .table-of-contents li {
+        margin-bottom: 0.5rem;
+    }
+    .table-of-contents li a {
+        color: #007bff;
+        text-decoration: none;
+    }
+    .table-of-contents li a:hover {
+        text-decoration: underline;
+    }
+    .table-of-contents li li {
+        margin-left: 1.5rem;
+        margin-top: 0.25rem;
+    }
+    /* TOC button styling to match Quill toolbar */
+    .ql-toc {
+        width: 28px;
+        height: 24px;
+        display: inline-block;
+        padding: 3px 5px;
+        cursor: pointer;
+        border: none;
+        background: transparent;
+    }
+    .ql-toc:hover {
+        background-color: #f0f0f0;
+        border-radius: 3px;
+    }
+    .ql-toc svg {
+        width: 18px;
+        height: 18px;
+    }
+    .ql-toc svg .ql-stroke {
+        stroke: #444;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 2;
+        fill: none;
     }
 </style>
 {% endblock %}

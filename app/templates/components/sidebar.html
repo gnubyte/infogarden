@@ -4,39 +4,57 @@
             {% for doc in value %}
                 <li class="sidebar-tree-item">
                     <a href="{{ url_for('docs.view', doc_id=doc.id) }}" 
-                       class="sidebar-tree-link {{ 'active' if current_page == 'doc' and current_id == doc.id else '' }}"
+                       class="sidebar-tree-link draggable-doc {{ 'active' if current_page == 'doc' and current_id == doc.id else '' }}"
+                       draggable="true"
+                       data-doc-id="{{ doc.id }}"
                        style="padding-left: {{ (level + 1) * 0.75 }}rem;">
                         <span class="sidebar-tree-icon">📄</span>
-                        {{ doc.title.split('/')[-1] }}
+                        {{ doc.title }}
                     </a>
                 </li>
             {% endfor %}
-        {% elif key != '_children' %}
-            <li class="sidebar-tree-item">
-                <div class="sidebar-tree-toggle sidebar-tree-link" 
-                     onclick="toggleTreeSection(this)"
-                     style="padding-left: {{ level * 0.75 }}rem;">
-                    <span class="sidebar-tree-icon tree-icon">▶</span>
-                    <strong>{{ key }}</strong>
-                </div>
-                <ul class="sidebar-tree-children" style="display: none;">
-                    {% if '_children' in value %}
-                        {{ render_tree_node(value['_children'], level + 1, current_page, current_id) }}
-                    {% endif %}
-                    {% if '_docs' in value %}
-                        {% for doc in value['_docs'] %}
-                            <li class="sidebar-tree-item">
-                                <a href="{{ url_for('docs.view', doc_id=doc.id) }}" 
-                                   class="sidebar-tree-link {{ 'active' if current_page == 'doc' and current_id == doc.id else '' }}"
-                                   style="padding-left: {{ (level + 1) * 0.75 }}rem;">
-                                    <span class="sidebar-tree-icon">📄</span>
-                                    {{ doc.title.split('/')[-1] }}
-                                </a>
-                            </li>
-                        {% endfor %}
-                    {% endif %}
-                </ul>
-            </li>
+        {% else %}
+            {# This is a folder node #}
+            {% if value is mapping %}
+                {% set folder = value.get('_folder') %}
+                {% set children = value.get('_children', {}) %}
+                {% set docs = value.get('_docs', []) %}
+                {% if folder %}
+                    <li class="sidebar-tree-item">
+                        <div class="sidebar-tree-toggle sidebar-tree-link drop-zone" 
+                             onclick="toggleTreeSection(this)"
+                             data-folder-id="{{ folder.id }}"
+                             style="padding-left: {{ level * 0.75 }}rem;">
+                            <span class="sidebar-tree-icon tree-icon">▶</span>
+                            <a href="{{ url_for('docs.folder_view', folder_id=folder.id) }}" 
+                               class="folder-name-link"
+                               onclick="event.stopPropagation();"
+                               style="text-decoration: none; color: inherit;">
+                                <span class="folder-name">📁 {{ folder.name }}</span>
+                            </a>
+                        </div>
+                        <ul class="sidebar-tree-children" style="display: none;">
+                            {% if children %}
+                                {{ render_tree_node(children, level + 1, current_page, current_id) }}
+                            {% endif %}
+                            {% if docs %}
+                                {% for doc in docs %}
+                                    <li class="sidebar-tree-item">
+                                        <a href="{{ url_for('docs.view', doc_id=doc.id) }}" 
+                                           class="sidebar-tree-link draggable-doc {{ 'active' if current_page == 'doc' and current_id == doc.id else '' }}"
+                                           draggable="true"
+                                           data-doc-id="{{ doc.id }}"
+                                           style="padding-left: {{ (level + 1) * 0.75 }}rem;">
+                                            <span class="sidebar-tree-icon">📄</span>
+                                            {{ doc.title }}
+                                        </a>
+                                    </li>
+                                {% endfor %}
+                            {% endif %}
+                        </ul>
+                    </li>
+                {% endif %}
+            {% endif %}
         {% endif %}
     {% endfor %}
 {% endmacro %}
@@ -45,14 +63,44 @@
 <div class="sidebar">
     {% if doc_tree %}
     <div class="sidebar-section">
-        <div class="sidebar-section-title">
-            <i class="bi bi-file-text"></i> Documents
+        <div class="sidebar-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span><i class="bi bi-file-text"></i> Documents</span>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <a href="{{ url_for('docs.index') }}" 
+                   class="btn btn-sm btn-link p-0 text-muted" 
+                   title="Browse documents"
+                   style="font-size: 0.875rem; line-height: 1;">
+                    <i class="bi bi-folder-fill"></i>
+                </a>
+                <button type="button" 
+                        class="btn btn-sm btn-link p-0 text-muted" 
+                        id="doc-lock-toggle"
+                        title="Toggle document moving"
+                        style="font-size: 0.875rem; line-height: 1;">
+                    <i class="bi bi-lock-fill" id="doc-lock-icon"></i>
+                </button>
+            </div>
         </div>
-        <ul class="sidebar-tree" id="docs-tree">
+        <ul class="sidebar-tree drop-zone-root" id="docs-tree" data-folder-id="">
             {{ render_tree_node(doc_tree, 0, current_page, current_id) }}
         </ul>
     </div>
     {% endif %}
+    
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">
+            <i class="bi bi-download"></i> Software
+        </div>
+        <ul class="sidebar-tree">
+            <li class="sidebar-tree-item">
+                <a href="{{ url_for('docs.software_index') }}" 
+                   class="sidebar-tree-link {{ 'active' if current_page == 'software' else '' }}">
+                    <span class="sidebar-tree-icon">💾</span>
+                    Browse Software
+                </a>
+            </li>
+        </ul>
+    </div>
     
     <div class="sidebar-section">
         <div class="sidebar-section-title">
@@ -137,8 +185,180 @@ function toggleTreeSection(element) {
     }
 }
 
-// Auto-expand tree sections containing active item
+// Document drag and drop functionality
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize lock state from localStorage
+    const lockToggle = document.getElementById('doc-lock-toggle');
+    const lockIcon = document.getElementById('doc-lock-icon');
+    const isUnlocked = localStorage.getItem('docMoveUnlocked') === 'true';
+    
+    function updateLockState(unlocked) {
+        if (unlocked) {
+            lockIcon.classList.remove('bi-lock-fill');
+            lockIcon.classList.add('bi-unlock-fill');
+            lockIcon.parentElement.title = 'Document moving enabled (click to lock)';
+            document.querySelectorAll('.draggable-doc').forEach(el => {
+                el.draggable = true;
+            });
+            document.querySelectorAll('.drop-zone, .drop-zone-root').forEach(el => {
+                el.classList.add('drop-enabled');
+            });
+        } else {
+            lockIcon.classList.remove('bi-unlock-fill');
+            lockIcon.classList.add('bi-lock-fill');
+            lockIcon.parentElement.title = 'Document moving disabled (click to unlock)';
+            document.querySelectorAll('.draggable-doc').forEach(el => {
+                el.draggable = false;
+            });
+            document.querySelectorAll('.drop-zone, .drop-zone-root').forEach(el => {
+                el.classList.remove('drop-enabled');
+            });
+        }
+    }
+    
+    updateLockState(isUnlocked);
+    
+    lockToggle.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const currentState = localStorage.getItem('docMoveUnlocked') === 'true';
+        const newState = !currentState;
+        localStorage.setItem('docMoveUnlocked', newState.toString());
+        updateLockState(newState);
+    });
+    
+    // Drag and drop handlers
+    let draggedElement = null;
+    
+    document.querySelectorAll('.draggable-doc').forEach(doc => {
+        doc.addEventListener('dragstart', function(e) {
+            if (this.draggable) {
+                draggedElement = this;
+                this.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', this.getAttribute('data-doc-id'));
+            } else {
+                e.preventDefault();
+            }
+        });
+        
+        doc.addEventListener('dragend', function(e) {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.drop-zone').forEach(zone => {
+                zone.classList.remove('drag-over');
+            });
+            draggedElement = null;
+        });
+    });
+    
+    function handleDrop(zone, docId, folderId) {
+        // Expand folder if collapsed (only for folder drop zones)
+        if (zone.classList.contains('sidebar-tree-toggle')) {
+            const children = zone.nextElementSibling;
+            if (children && children.style.display === 'none') {
+                toggleTreeSection(zone);
+            }
+        }
+        
+        // Move document via API
+        fetch('{{ url_for("docs.move_document") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                doc_id: docId,
+                folder_id: folderId || null
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (window.showToast) {
+                    showToast('success', 'Document Moved', 'Document moved successfully');
+                }
+                // Reload page to reflect changes
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
+            } else {
+                if (window.showToast) {
+                    showToast('danger', 'Error', data.error || 'Failed to move document');
+                } else {
+                    alert(data.error || 'Failed to move document');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error moving document:', error);
+            if (window.showToast) {
+                showToast('danger', 'Error', 'Failed to move document');
+            } else {
+                alert('Failed to move document');
+            }
+        });
+    }
+    
+    document.querySelectorAll('.drop-zone').forEach(zone => {
+        zone.addEventListener('dragover', function(e) {
+            if (this.classList.contains('drop-enabled') && draggedElement) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = 'move';
+                this.classList.add('drag-over');
+            }
+        });
+        
+        zone.addEventListener('dragleave', function(e) {
+            this.classList.remove('drag-over');
+        });
+        
+        zone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.classList.remove('drag-over');
+            
+            if (!draggedElement || !this.classList.contains('drop-enabled')) {
+                return;
+            }
+            
+            const docId = draggedElement.getAttribute('data-doc-id');
+            const folderId = this.getAttribute('data-folder-id');
+            handleDrop(this, docId, folderId);
+        });
+    });
+    
+    // Handle root level drop zone
+    const rootDropZone = document.querySelector('.drop-zone-root');
+    if (rootDropZone) {
+        rootDropZone.addEventListener('dragover', function(e) {
+            if (this.classList.contains('drop-enabled') && draggedElement) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = 'move';
+                this.classList.add('drag-over');
+            }
+        });
+        
+        rootDropZone.addEventListener('dragleave', function(e) {
+            this.classList.remove('drag-over');
+        });
+        
+        rootDropZone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.classList.remove('drag-over');
+            
+            if (!draggedElement || !this.classList.contains('drop-enabled')) {
+                return;
+            }
+            
+            const docId = draggedElement.getAttribute('data-doc-id');
+            handleDrop(this, docId, null);
+        });
+    }
+    
+    // Auto-expand tree sections containing active item
     const activeLink = document.querySelector('.sidebar-tree-link.active');
     if (activeLink) {
         let parent = activeLink.parentElement;

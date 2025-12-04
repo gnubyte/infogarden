@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "components/sidebar.html" import render_sidebar %}
+
+{% block title %}Edit Software - InfoGarden{% endblock %}
+
+{% block content %}
+<div class="content-with-sidebar">
+    {{ render_sidebar(doc_tree, passwords, contacts, 'software', None) }}
+    <div class="main-content">
+        <h1>Edit Software</h1>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <form method="POST" enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            
+                            <div class="mb-3">
+                                <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="title" name="title" value="{{ software.title }}" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="file" class="form-label">Replace Software File (Optional)</label>
+                                <input type="file" class="form-control" id="file" name="file">
+                                <small class="form-text text-muted">Current file: {{ software.file_name }} ({% if software.file_size < 1024 %}{{ software.file_size }} B{% elif software.file_size < 1024 * 1024 %}{{ "%.2f"|format(software.file_size / 1024) }} KB{% elif software.file_size < 1024 * 1024 * 1024 %}{{ "%.2f"|format(software.file_size / (1024 * 1024)) }} MB{% else %}{{ "%.2f"|format(software.file_size / (1024 * 1024 * 1024)) }} GB{% endif %})</small>
+                                <small class="form-text text-muted">Leave empty to keep current file. Maximum file size: 2GB</small>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="note" class="form-label">Note</label>
+                                <textarea class="form-control" id="note" name="note" rows="3">{{ software.note or '' }}</textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="link" class="form-label">Documentation Link</label>
+                                <input type="url" class="form-control" id="link" name="link" value="{{ software.link or '' }}" placeholder="https://example.com/docs">
+                                <small class="form-text text-muted">Optional: Link to documentation on how to use, setup, or install this software</small>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <small class="text-muted">
+                                    <strong>Uploaded by:</strong> {{ software.uploader.username if software.uploader else 'Unknown' }}<br>
+                                    <strong>Last uploaded:</strong> {{ software.last_uploaded.strftime('%Y-%m-%d %H:%M:%S') if software.last_uploaded else '-' }}<br>
+                                    <strong>Download count:</strong> {{ software.download_count }}
+                                </small>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <button type="submit" class="btn btn-primary">Update Software</button>
+                                <a href="{{ url_for('docs.software_index') }}" class="btn btn-secondary">Cancel</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+

@@ -31,7 +31,7 @@ def index():
     from app.modules.docs.models import Document
     from app.modules.contacts.models import Contact
     documents = Document.query.filter_by(org_id=org_id).order_by(Document.title).all()
-    doc_tree = build_document_tree(documents)
+    doc_tree = build_document_tree(documents, org_id)
     contacts = Contact.query.filter_by(org_id=org_id).order_by(Contact.name).all()
     
     log_activity('view', 'password', None)

@@ -25,6 +25,8 @@ class User(UserMixin, Base):
     org_id = Column(Integer, ForeignKey('organizations.id'), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login = Column(DateTime, nullable=True)
+    reset_token = Column(String(255), nullable=True)
+    reset_token_expires = Column(DateTime, nullable=True)
     
     organization = relationship('Organization', back_populates='users')
     activity_logs = relationship('ActivityLog', back_populates='user')
@@ -61,6 +63,9 @@ class Organization(Base):
     description = Column(Text, nullable=True)
     status = Column(String(50), nullable=False, default='active')  # active, inactive, archived
     logo_path = Column(String(255), nullable=True)
+    custom_links = Column(JSON, nullable=True)  # List of {label: str, url: str} objects
+    pinned_contacts = Column(JSON, nullable=True)  # List of {contact_id: int, note: str} objects
+    must_knows = Column(Text, nullable=True)  # Rich text field for important operational information
     created_at = Column(DateTime, default=datetime.utcnow)
     
     users = relationship('User', back_populates='organization')
@@ -68,8 +73,10 @@ class Organization(Base):
     
     # Relationships to module models
     documents = relationship('Document', back_populates='organization', cascade='all, delete-orphan')
+    document_folders = relationship('DocumentFolder', back_populates='organization', cascade='all, delete-orphan')
     contacts = relationship('Contact', back_populates='organization', cascade='all, delete-orphan')
     passwords = relationship('PasswordEntry', back_populates='organization', cascade='all, delete-orphan')
+    software = relationship('Software', back_populates='organization', cascade='all, delete-orphan')
 
 class ActivityLog(Base):
     __tablename__ = 'activity_logs'
@@ -106,4 +113,22 @@ class Setting(Base):
     value = Column(Text, nullable=True)
     description = Column(Text, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class ExportJob(Base):
+    __tablename__ = 'export_jobs'
+    query = QueryProperty()
+    
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey('organizations.id'), nullable=False)
+    status = Column(String(50), nullable=False, default='pending')  # pending, processing, completed, failed, cancelled
+    progress = Column(Integer, default=0)  # 0-100
+    file_path = Column(String(500), nullable=True)  # Path to the generated ZIP file
+    error_message = Column(Text, nullable=True)
+    created_by = Column(Integer, ForeignKey('users.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    
+    organization = relationship('Organization')
+    creator = relationship('User')
 

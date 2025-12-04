@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from "components/sidebar.html" import render_sidebar %}
+
+{% block title %}Software - InfoGarden{% endblock %}
+
+{% block content %}
+<div class="content-with-sidebar">
+    {{ render_sidebar(doc_tree, passwords, contacts, 'software', None) }}
+    <div class="main-content">
+        <h1>Software</h1>
+        <p class="text-muted">Software such as company specific VPNs with instructions on how to use it, setup or install it can be uploaded here up to 2GB</p>
+
+        <div class="row mt-4">
+            <div class="col-12">
+        <div class="mb-3">
+            <a href="{{ url_for('docs.software_create') }}" class="btn btn-primary">Upload Software</a>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Software Files</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>File Name</th>
+                            <th>File Size</th>
+                            <th>Uploaded By</th>
+                            <th>Last Uploaded</th>
+                            <th>Downloads</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sw in software_list %}
+                        <tr>
+                            <td>
+                                <strong>{{ sw.title }}</strong>
+                                {% if sw.note %}
+                                <br><small class="text-muted">{{ sw.note[:100] }}{% if sw.note|length > 100 %}...{% endif %}</small>
+                                {% endif %}
+                                {% if sw.link %}
+                                <br><small><a href="{{ sw.link }}" target="_blank" class="text-info">📄 View Documentation</a></small>
+                                {% endif %}
+                            </td>
+                            <td>{{ sw.file_name }}</td>
+                            <td>
+                                {% if sw.file_size < 1024 %}
+                                    {{ sw.file_size }} B
+                                {% elif sw.file_size < 1024 * 1024 %}
+                                    {{ "%.2f"|format(sw.file_size / 1024) }} KB
+                                {% elif sw.file_size < 1024 * 1024 * 1024 %}
+                                    {{ "%.2f"|format(sw.file_size / (1024 * 1024)) }} MB
+                                {% else %}
+                                    {{ "%.2f"|format(sw.file_size / (1024 * 1024 * 1024)) }} GB
+                                {% endif %}
+                            </td>
+                            <td>{{ sw.uploader.username if sw.uploader else 'Unknown' }}</td>
+                            <td>{{ sw.last_uploaded.strftime('%Y-%m-%d %H:%M:%S') if sw.last_uploaded else '-' }}</td>
+                            <td>{{ sw.download_count }}</td>
+                            <td>
+                                <a href="{{ url_for('docs.software_download', software_id=sw.id) }}" class="btn btn-sm btn-success">Download</a>
+                                <a href="{{ url_for('docs.software_edit', software_id=sw.id) }}" class="btn btn-sm btn-primary">Edit</a>
+                                <form method="POST" action="{{ url_for('docs.software_delete', software_id=sw.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center">No software uploaded yet</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+{% endblock %}
+
+

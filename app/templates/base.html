@@ -162,6 +162,35 @@
         .sidebar {
             min-width: 280px; /* Prevent sidebar from shrinking */
         }
+        /* Drag and drop styles */
+        .draggable-doc.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+        .draggable-doc[draggable="true"] {
+            cursor: grab;
+        }
+        .drop-zone.drop-enabled {
+            position: relative;
+        }
+        .drop-zone.drop-enabled.drag-over {
+            background-color: #e7f3ff;
+            border: 2px dashed #0d6efd;
+            border-radius: 0.25rem;
+        }
+        .drop-zone.drop-enabled.drag-over .folder-name::after {
+            content: " (drop here)";
+            color: #0d6efd;
+            font-size: 0.8em;
+            font-weight: normal;
+        }
+        .drop-zone-root.drop-enabled.drag-over {
+            background-color: #e7f3ff;
+            border: 2px dashed #0d6efd;
+            border-radius: 0.25rem;
+            padding: 0.5rem;
+            min-height: 2rem;
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -186,12 +215,6 @@
                     {% if current_user.is_global_admin() %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('orgs.index') }}">Organizations</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('users.index') }}">Users</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('core_auth.settings') }}">Settings</a>
                     </li>
                     {% endif %}
                     <li class="nav-item">
@@ -236,7 +259,9 @@
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
                             {% if current_user.is_global_admin() %}
+                            <li><a class="dropdown-item" href="{{ url_for('users.index') }}">Users</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('core_auth.settings') }}">Settings</a></li>
+                            <li><hr class="dropdown-divider"></li>
                             {% endif %}
                             <li><a class="dropdown-item" href="{{ url_for('core_auth.logout') }}">Logout</a></li>
                         </ul>
@@ -246,6 +271,11 @@
             </div>
         </div>
     </nav>
+
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+        <div id="toast-container"></div>
+    </div>
 
     <div class="container-fluid mt-4">
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -391,6 +421,51 @@
                 }
             });
         }
+        
+        // Toast notification function
+        function showToast(type, title, message, duration = 5000) {
+            const toastContainer = document.getElementById('toast-container');
+            const toastId = 'toast-' + Date.now();
+            
+            // Map type to Bootstrap classes
+            const typeClasses = {
+                'success': 'bg-success text-white',
+                'danger': 'bg-danger text-white',
+                'warning': 'bg-warning text-dark',
+                'info': 'bg-info text-white'
+            };
+            
+            const toastClass = typeClasses[type] || typeClasses['info'];
+            
+            // Create toast HTML
+            const toastHTML = `
+                <div id="${toastId}" class="toast ${toastClass}" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="${duration}">
+                    <div class="toast-header ${toastClass}">
+                        <strong class="me-auto">${title}</strong>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                </div>
+            `;
+            
+            // Add toast to container
+            toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+            
+            // Initialize and show toast
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement);
+            toast.show();
+            
+            // Remove toast element after it's hidden
+            toastElement.addEventListener('hidden.bs.toast', function() {
+                toastElement.remove();
+            });
+        }
+        
+        // Make showToast available globally
+        window.showToast = showToast;
     </script>
     {% block extra_js %}{% endblock %}
 </body>

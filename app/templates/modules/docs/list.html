@@ -8,16 +8,82 @@
     {{ render_sidebar(doc_tree, passwords, contacts, 'doc', None) }}
     <div class="main-content">
         <h1>Documents</h1>
+        
+        {% if current_folder and breadcrumb_path %}
+        <nav aria-label="breadcrumb" class="mt-2 mb-3">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('docs.index') }}">Documents</a></li>
+                {% for part in breadcrumb_path %}
+                    {% if loop.last %}
+                        <li class="breadcrumb-item active" aria-current="page">{{ part.name }}</li>
+                    {% else %}
+                        <li class="breadcrumb-item"><a href="{{ url_for('docs.folder_view', folder_id=part.id) }}">{{ part.name }}</a></li>
+                    {% endif %}
+                {% endfor %}
+            </ol>
+        </nav>
+        {% endif %}
 
         <div class="row mt-4">
             <div class="col-12">
-        <a href="{{ url_for('docs.create') }}" class="btn btn-primary mb-3">Create Document</a>
+        <div class="mb-3">
+            {% if current_folder %}
+                <a href="{{ url_for('docs.create', folder_id=current_folder.id) }}" class="btn btn-primary">Create Document</a>
+            {% else %}
+                <a href="{{ url_for('docs.create') }}" class="btn btn-primary">Create Document</a>
+            {% endif %}
+            <a href="{{ url_for('docs.create_folder') }}" class="btn btn-secondary">Create Folder</a>
+            {% if current_folder %}
+                <a href="{{ url_for('docs.index') }}" class="btn btn-outline-secondary">Back to All Documents</a>
+            {% endif %}
+        </div>
+        
+        {% if folders %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">{% if current_folder %}Subfolders{% else %}Folders{% endif %}</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Path</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for folder in folders %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('docs.folder_view', folder_id=folder.id) }}" class="text-decoration-none">
+                                    📁 {{ folder.name }}
+                                </a>
+                            </td>
+                            <td>{{ folder.get_path() }}</td>
+                            <td>
+                                <a href="{{ url_for('docs.folder_view', folder_id=folder.id) }}" class="btn btn-sm btn-info">View</a>
+                                <a href="{{ url_for('docs.edit_folder', folder_id=folder.id) }}" class="btn btn-sm btn-primary">Edit</a>
+                                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteFolderModal" data-folder-id="{{ folder.id }}" data-folder-name="{{ folder.name }}">Delete</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+        
         <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Documents</h5>
+            </div>
             <div class="card-body">
                 <table class="table">
                     <thead>
                         <tr>
                             <th>Title</th>
+                            <th>Folder</th>
                             <th>Updated</th>
                             <th>Actions</th>
                         </tr>
@@ -26,6 +92,7 @@
                         {% for doc in documents %}
                         <tr>
                             <td>{{ doc.title }}</td>
+                            <td>{{ doc.folder.get_path() if doc.folder else 'Root' }}</td>
                             <td>{{ doc.updated_at.strftime('%Y-%m-%d %H:%M:%S') if doc.updated_at else '-' }}</td>
                             <td>
                                 <a href="{{ url_for('docs.view', doc_id=doc.id) }}" class="btn btn-sm btn-info">View</a>
@@ -39,15 +106,99 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="3" class="text-center">No documents found</td>
+                            <td colspan="4" class="text-center">No documents found</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Folder Confirmation Modal -->
+<div class="modal fade" id="deleteFolderModal" tabindex="-1" aria-labelledby="deleteFolderModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteFolderModalLabel">Delete Folder</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning" role="alert">
+                    <strong>Warning:</strong> This action cannot be undone!
+                </div>
+                <p>Are you sure you want to delete the folder <strong id="modal-folder-name"></strong>?</p>
+                <div id="folder-stats" class="mt-3">
+                    <p class="mb-2"><strong>This will also delete:</strong></p>
+                    <ul class="list-unstyled ms-3">
+                        <li id="stats-documents">📄 <span id="doc-count">Loading...</span> document(s)</li>
+                        <li id="stats-subfolders">📁 <span id="subfolder-count">Loading...</span> subfolder(s)</li>
+                    </ul>
+                    <p id="empty-folder-message" class="text-muted mt-2" style="display: none;">This folder is empty.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="delete-folder-form" method="POST" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">Delete Folder</button>
+                </form>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const deleteModal = document.getElementById('deleteFolderModal');
+    const deleteForm = document.getElementById('delete-folder-form');
+    let currentFolderId = null;
+    
+    deleteModal.addEventListener('show.bs.modal', function(event) {
+        const button = event.relatedTarget;
+        currentFolderId = button.getAttribute('data-folder-id');
+        const folderName = button.getAttribute('data-folder-name');
+        
+        // Update modal content
+        document.getElementById('modal-folder-name').textContent = folderName;
+        document.getElementById('doc-count').textContent = 'Loading...';
+        document.getElementById('subfolder-count').textContent = 'Loading...';
+        document.getElementById('stats-documents').style.display = 'block';
+        document.getElementById('stats-subfolders').style.display = 'block';
+        document.getElementById('empty-folder-message').style.display = 'none';
+        
+        // Update form action
+        deleteForm.action = `{{ url_for('docs.delete_folder', folder_id=0) }}`.replace('0', currentFolderId);
+        
+        // Fetch folder statistics
+        const statsUrl = `{{ url_for('docs.folder_stats', folder_id=0) }}`.replace('0', currentFolderId);
+        fetch(statsUrl)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('doc-count').textContent = data.document_count;
+                document.getElementById('subfolder-count').textContent = data.subfolder_count;
+                
+                // Show empty message if folder is empty
+                if (data.document_count === 0 && data.subfolder_count === 0) {
+                    document.getElementById('empty-folder-message').style.display = 'block';
+                    document.getElementById('stats-documents').style.display = 'none';
+                    document.getElementById('stats-subfolders').style.display = 'none';
+                } else {
+                    document.getElementById('empty-folder-message').style.display = 'none';
+                    document.getElementById('stats-documents').style.display = 'block';
+                    document.getElementById('stats-subfolders').style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching folder stats:', error);
+                document.getElementById('doc-count').textContent = 'Error';
+                document.getElementById('subfolder-count').textContent = 'Error';
+            });
+    });
+});
+</script>
 {% endblock %}
 

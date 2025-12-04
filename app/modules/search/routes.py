@@ -1,7 +1,7 @@
 from flask import jsonify, request, session
 from flask_login import login_required, current_user
 from app.modules.search import bp
-from app.modules.docs.models import Document
+from app.modules.docs.models import Document, Software
 from app.modules.contacts.models import Contact
 from app.modules.passwords.models import PasswordEntry
 from app.core.activity_logger import log_activity
@@ -73,6 +73,22 @@ def search():
             'title': pwd.title,
             'url': f'/passwords/{pwd.id}/edit',
             'snippet': pwd.link or pwd.username or pwd.email or ''
+        })
+    
+    # Search software (title and file name)
+    software_list = Software.query.filter(
+        Software.org_id == org_id,
+        (Software.title.contains(query) | 
+         Software.file_name.contains(query))
+    ).limit(5).all()
+    
+    for sw in software_list:
+        results.append({
+            'type': 'software',
+            'id': sw.id,
+            'title': sw.title,
+            'url': f'/docs/software/{sw.id}/edit',
+            'snippet': f"File: {sw.file_name}" + (f" - {sw.note[:50]}..." if sw.note and len(sw.note) > 50 else (f" - {sw.note}" if sw.note else ''))
         })
     
     log_activity('view', 'search', None, {'query': query, 'result_count': len(results)})

@@ -1,0 +1,500 @@
+{% extends "base.html" %}
+
+{% block title %}{{ org.name }} - InfoGarden{% endblock %}
+
+{% block extra_head %}
+<style>
+    .rich-text-content {
+        line-height: 1.6;
+    }
+    .rich-text-content img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin: 1rem auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .rich-text-content h1, .rich-text-content h2, .rich-text-content h3 {
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    .rich-text-content p {
+        margin-bottom: 1rem;
+    }
+    .rich-text-content ul, .rich-text-content ol {
+        margin-bottom: 1rem;
+        padding-left: 2rem;
+    }
+    .rich-text-content blockquote {
+        border-left: 4px solid #ddd;
+        padding-left: 1rem;
+        margin: 1rem 0;
+        color: #666;
+    }
+    .rich-text-content code {
+        background-color: #f4f4f4;
+        padding: 2px 5px;
+        border-radius: 3px;
+        font-family: 'Courier New', monospace;
+    }
+    .rich-text-content pre {
+        background-color: #f4f4f4;
+        padding: 15px;
+        border-radius: 5px;
+        overflow-x: auto;
+        margin: 1rem 0;
+    }
+    .rich-text-content a {
+        color: #0d6efd;
+        text-decoration: none;
+    }
+    .rich-text-content a:hover {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>{{ org.name }}</h1>
+
+<div class="row mt-4">
+    <div class="col-md-8">
+        <div class="card mb-3">
+            <div class="card-body">
+                {% if org.logo_path %}
+                <div class="mb-3">
+                    <img src="{{ org.logo_path }}" alt="{{ org.name }} logo" style="max-height: 150px; max-width: 300px; object-fit: contain;">
+                </div>
+                {% endif %}
+                
+                <h5 class="card-title">Organization Information</h5>
+                <p><strong>Description:</strong> {{ org.description or 'No description provided' }}</p>
+                <p><strong>Status:</strong> 
+                    {% if org.status == 'active' %}
+                    <span class="badge bg-success">Active</span>
+                    {% elif org.status == 'inactive' %}
+                    <span class="badge bg-warning">Inactive</span>
+                    {% elif org.status == 'archived' %}
+                    <span class="badge bg-secondary">Archived</span>
+                    {% else %}
+                    <span class="badge bg-secondary">{{ org.status }}</span>
+                    {% endif %}
+                </p>
+                <p><strong>Total Contacts:</strong> {{ contact_count }}</p>
+                <p><strong>Total Documents:</strong> {{ document_count }}</p>
+                <p><strong>Created:</strong> {{ org.created_at.strftime('%Y-%m-%d') if org.created_at else '-' }}</p>
+            </div>
+        </div>
+        
+        {% if org.must_knows %}
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Must Knows</h5>
+                <p class="text-muted small mb-3">These are services or high level notes that a user attempting to make sure the company is operational should know. Examples might be quickbook servers and how to access them.</p>
+                <div class="rich-text-content">{{ org.must_knows|safe }}</div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if org.custom_links %}
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Quick Links</h5>
+                <div class="list-group">
+                    {% for link in org.custom_links %}
+                    <a href="{{ link.url }}" target="_blank" rel="noopener noreferrer" class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ link.label }}</h6>
+                            <small><i class="bi bi-box-arrow-up-right"></i></small>
+                        </div>
+                        <small class="text-muted">{{ link.url }}</small>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if org.pinned_contacts %}
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Pinned Contacts</h5>
+                <p class="text-muted small mb-3">Quick access contacts for IT emergencies</p>
+                <div class="list-group">
+                    {% for pinned in org.pinned_contacts %}
+                        {% set contact_id = pinned.get('contact_id') %}
+                        {% if contact_id and contacts.get(contact_id) %}
+                            {% set contact = contacts.get(contact_id) %}
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">{{ contact.name }}</h6>
+                                        {% if pinned.get('note') %}
+                                        <p class="mb-2 text-muted small"><em>{{ pinned.get('note') }}</em></p>
+                                        {% endif %}
+                                        <div class="small">
+                                            {% if contact.email %}
+                                            <div class="mb-1">
+                                                <i class="bi bi-envelope"></i> 
+                                                <a href="mailto:{{ contact.email }}">{{ contact.email }}</a>
+                                            </div>
+                                            {% endif %}
+                                            {% if contact.phone %}
+                                            <div>
+                                                <i class="bi bi-telephone"></i> 
+                                                <a href="tel:{{ contact.phone }}">{{ contact.phone }}</a>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Actions</h5>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('orgs.edit', org_id=org.id) }}" class="btn btn-primary">Edit Organization</a>
+                    <a href="{{ url_for('orgs.index') }}" class="btn btn-secondary">Back to List</a>
+                </div>
+            </div>
+        </div>
+        
+        {% if current_user.is_global_admin() %}
+        <div class="card mt-3">
+            <div class="card-body">
+                <h5 class="card-title">Export Documentation</h5>
+                <p class="text-muted small">Export all contacts, documents, and passwords for this organization.</p>
+                
+                <div id="export-section">
+                    <div id="export-buttons" class="d-grid gap-2">
+                        <button id="start-export-btn" class="btn btn-success" onclick="startExport()">
+                            <i class="bi bi-download"></i> Export All Documentation
+                        </button>
+                        <button id="regenerate-export-btn" class="btn btn-warning" onclick="regenerateExport()" style="display: none;">
+                            <i class="bi bi-arrow-clockwise"></i> Regenerate Export
+                        </button>
+                        <a id="download-export-btn" class="btn btn-primary" href="#" style="display: none;" onclick="downloadExport()">
+                            <i class="bi bi-file-earmark-zip"></i> Download Export
+                        </a>
+                    </div>
+                    
+                    <div id="export-progress" style="display: none;" class="mt-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <small class="text-muted">Exporting...</small>
+                            <small id="export-progress-text" class="text-muted">0%</small>
+                        </div>
+                        <div class="progress" style="height: 25px;">
+                            <div id="export-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                            </div>
+                        </div>
+                        <small id="export-status-text" class="text-muted d-block mt-2"></small>
+                        <button id="cancel-export-btn" class="btn btn-sm btn-danger mt-2" onclick="cancelExport()" style="display: none;">
+                            <i class="bi bi-x-circle"></i> Cancel Export
+                        </button>
+                    </div>
+                    
+                    <div id="export-failed" style="display: none;" class="mt-3">
+                        <div class="alert alert-danger" role="alert">
+                            <h6 class="alert-heading">
+                                <i class="bi bi-exclamation-triangle"></i> Export Failed
+                            </h6>
+                            <p class="mb-0" id="export-error-message"></p>
+                            <small id="export-failed-timestamp" class="text-muted"></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if current_user.is_global_admin() %}
+<script>
+let exportCheckInterval = null;
+
+function startExport() {
+    const orgId = {{ org.id }};
+    const formData = new FormData();
+    formData.append('csrf_token', '{{ csrf_token() }}');
+    
+    // Hide any previous failed status
+    document.getElementById('export-failed').style.display = 'none';
+    
+    fetch(`/orgs/${orgId}/export/start`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('start-export-btn').style.display = 'none';
+            document.getElementById('export-progress').style.display = 'block';
+            document.getElementById('cancel-export-btn').style.display = 'block';
+            checkExportStatus();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to start export'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to start export');
+    });
+}
+
+function regenerateExport() {
+    if (!confirm('This will delete the existing export and create a new one. Continue?')) {
+        return;
+    }
+    
+    const orgId = {{ org.id }};
+    const formData = new FormData();
+    formData.append('csrf_token', '{{ csrf_token() }}');
+    
+    // Hide any previous failed status
+    document.getElementById('export-failed').style.display = 'none';
+    
+    fetch(`/orgs/${orgId}/export/regenerate`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('regenerate-export-btn').style.display = 'none';
+            document.getElementById('download-export-btn').style.display = 'none';
+            document.getElementById('export-progress').style.display = 'block';
+            document.getElementById('cancel-export-btn').style.display = 'block';
+            checkExportStatus();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to regenerate export'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to regenerate export');
+    });
+}
+
+function checkExportStatus() {
+    const orgId = {{ org.id }};
+    
+    if (exportCheckInterval) {
+        clearInterval(exportCheckInterval);
+    }
+    
+    exportCheckInterval = setInterval(() => {
+        fetch(`/orgs/${orgId}/export/status`)
+        .then(response => response.json())
+        .then(data => {
+            if (!data.exists) {
+                // No export job exists
+                clearInterval(exportCheckInterval);
+                exportCheckInterval = null;
+                return;
+            }
+            
+            const progress = data.progress || 0;
+            const status = data.status;
+            
+            // Update progress bar
+            const progressBar = document.getElementById('export-progress-bar');
+            const progressText = document.getElementById('export-progress-text');
+            const statusText = document.getElementById('export-status-text');
+            
+            progressBar.style.width = progress + '%';
+            progressBar.setAttribute('aria-valuenow', progress);
+            progressText.textContent = progress + '%';
+            
+            // Update status text with timestamp
+            if (data.updated_at) {
+                const updatedDate = new Date(data.updated_at);
+                statusText.textContent = `Last updated: ${updatedDate.toLocaleString()}`;
+            }
+            
+            if (status === 'completed') {
+                clearInterval(exportCheckInterval);
+                exportCheckInterval = null;
+                
+                document.getElementById('export-progress').style.display = 'none';
+                document.getElementById('export-failed').style.display = 'none';
+                document.getElementById('cancel-export-btn').style.display = 'none';
+                document.getElementById('start-export-btn').style.display = 'none';
+                document.getElementById('regenerate-export-btn').style.display = 'block';
+                document.getElementById('download-export-btn').style.display = 'block';
+                document.getElementById('download-export-btn').href = `/orgs/${orgId}/export/download`;
+            } else if (status === 'failed') {
+                clearInterval(exportCheckInterval);
+                exportCheckInterval = null;
+                
+                // Hide progress bar
+                document.getElementById('export-progress').style.display = 'none';
+                
+                // Show failed status
+                const failedDiv = document.getElementById('export-failed');
+                const errorMessage = document.getElementById('export-error-message');
+                const failedTimestamp = document.getElementById('export-failed-timestamp');
+                
+                errorMessage.textContent = data.error_message || 'Unknown error occurred during export';
+                
+                if (data.updated_at) {
+                    const failedDate = new Date(data.updated_at);
+                    failedTimestamp.textContent = `Failed at: ${failedDate.toLocaleString()}`;
+                } else if (data.created_at) {
+                    const createdDate = new Date(data.created_at);
+                    failedTimestamp.textContent = `Failed at: ${createdDate.toLocaleString()}`;
+                } else {
+                    failedTimestamp.textContent = '';
+                }
+                
+                failedDiv.style.display = 'block';
+                document.getElementById('cancel-export-btn').style.display = 'none';
+                document.getElementById('start-export-btn').style.display = 'block';
+                document.getElementById('regenerate-export-btn').style.display = 'none';
+                document.getElementById('download-export-btn').style.display = 'none';
+            } else if (status === 'pending' || status === 'processing') {
+                // Continue checking - job is still in progress
+                // Show cancel button
+                document.getElementById('cancel-export-btn').style.display = 'block';
+            } else if (status === 'cancelled') {
+                clearInterval(exportCheckInterval);
+                exportCheckInterval = null;
+                
+                // Hide progress bar
+                document.getElementById('export-progress').style.display = 'none';
+                document.getElementById('cancel-export-btn').style.display = 'none';
+                
+                // Show start button to allow new export
+                document.getElementById('start-export-btn').style.display = 'block';
+                document.getElementById('regenerate-export-btn').style.display = 'none';
+                document.getElementById('download-export-btn').style.display = 'none';
+            } else {
+                // Unknown status - stop checking to avoid infinite loop
+                clearInterval(exportCheckInterval);
+                exportCheckInterval = null;
+                document.getElementById('cancel-export-btn').style.display = 'none';
+            }
+        })
+        .catch(error => {
+            console.error('Error checking export status:', error);
+        });
+    }, 2000); // Check every 2 seconds
+}
+
+function downloadExport() {
+    // The link will handle the download
+    return true;
+}
+
+function cancelExport() {
+    if (!confirm('Are you sure you want to cancel this export?')) {
+        return;
+    }
+    
+    const orgId = {{ org.id }};
+    const formData = new FormData();
+    formData.append('csrf_token', '{{ csrf_token() }}');
+    
+    fetch(`/orgs/${orgId}/export/cancel`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Stop checking status
+            if (exportCheckInterval) {
+                clearInterval(exportCheckInterval);
+                exportCheckInterval = null;
+            }
+            
+            // Hide progress bar and show start button
+            document.getElementById('export-progress').style.display = 'none';
+            document.getElementById('cancel-export-btn').style.display = 'none';
+            document.getElementById('start-export-btn').style.display = 'block';
+            document.getElementById('regenerate-export-btn').style.display = 'none';
+            document.getElementById('download-export-btn').style.display = 'none';
+        } else {
+            alert('Error: ' + (data.error || 'Failed to cancel export'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to cancel export');
+    });
+}
+
+// Check status on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const orgId = {{ org.id }};
+    fetch(`/orgs/${orgId}/export/status`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.exists) {
+            const status = data.status;
+            
+            if (status === 'processing' || status === 'pending') {
+                document.getElementById('start-export-btn').style.display = 'none';
+                document.getElementById('export-progress').style.display = 'block';
+                document.getElementById('cancel-export-btn').style.display = 'block';
+                checkExportStatus();
+            } else if (status === 'completed' && data.has_file) {
+                document.getElementById('start-export-btn').style.display = 'none';
+                document.getElementById('regenerate-export-btn').style.display = 'block';
+                document.getElementById('download-export-btn').style.display = 'block';
+                document.getElementById('download-export-btn').href = `/orgs/${orgId}/export/download`;
+            } else if (status === 'failed') {
+                // Show failed status on page load - job has failed and thread is no longer running
+                const failedDiv = document.getElementById('export-failed');
+                const errorMessage = document.getElementById('export-error-message');
+                const failedTimestamp = document.getElementById('export-failed-timestamp');
+                
+                errorMessage.textContent = data.error_message || 'Unknown error occurred during export';
+                
+                if (data.updated_at) {
+                    const failedDate = new Date(data.updated_at);
+                    failedTimestamp.textContent = `Failed at: ${failedDate.toLocaleString()}`;
+                } else if (data.created_at) {
+                    const createdDate = new Date(data.created_at);
+                    failedTimestamp.textContent = `Failed at: ${createdDate.toLocaleString()}`;
+                } else {
+                    failedTimestamp.textContent = '';
+                }
+                
+                failedDiv.style.display = 'block';
+                document.getElementById('start-export-btn').style.display = 'block';
+                document.getElementById('regenerate-export-btn').style.display = 'none';
+                document.getElementById('download-export-btn').style.display = 'none';
+                document.getElementById('export-progress').style.display = 'none';
+                document.getElementById('cancel-export-btn').style.display = 'none';
+            } else if (status === 'cancelled') {
+                // Show start button for cancelled exports
+                document.getElementById('start-export-btn').style.display = 'block';
+                document.getElementById('regenerate-export-btn').style.display = 'none';
+                document.getElementById('download-export-btn').style.display = 'none';
+                document.getElementById('export-progress').style.display = 'none';
+                document.getElementById('cancel-export-btn').style.display = 'none';
+                document.getElementById('export-failed').style.display = 'none';
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error checking initial export status:', error);
+    });
+});
+</script>
+{% endif %}
+{% endblock %}
+

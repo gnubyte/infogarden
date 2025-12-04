@@ -112,7 +112,211 @@
                 <a href="{{ url_for('core_auth.backup_list') }}" class="btn btn-primary mt-2">View Backups</a>
             </div>
         </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>SMTP Settings</h5>
+            </div>
+            <div class="card-body">
+                <form id="smtp-settings-form" method="POST" action="{{ url_for('core_auth.smtp_settings_save') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="smtp_server" class="form-label">SMTP Server *</label>
+                                <input type="text" class="form-control" id="smtp_server" name="smtp_server" 
+                                       value="{{ settings.get('smtp_server', '') }}" 
+                                       placeholder="smtp.gmail.com" required>
+                                <small class="form-text text-muted">SMTP server hostname</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="smtp_port" class="form-label">SMTP Port *</label>
+                                <input type="number" class="form-control" id="smtp_port" name="smtp_port" 
+                                       value="{{ settings.get('smtp_port', '587') }}" 
+                                       min="1" max="65535" required>
+                                <small class="form-text text-muted">Common ports: 587 (TLS), 465 (SSL), 25</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="smtp_use_tls" name="smtp_use_tls" 
+                                   {{ 'checked' if settings.get('smtp_use_tls', 'true') == 'true' else '' }}>
+                            <label class="form-check-label" for="smtp_use_tls">
+                                Use TLS/STARTTLS
+                            </label>
+                            <small class="form-text text-muted d-block">Enable for most modern SMTP servers (Gmail, Outlook, etc.)</small>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="smtp_username" class="form-label">SMTP Username</label>
+                                <input type="text" class="form-control" id="smtp_username" name="smtp_username" 
+                                       value="{{ settings.get('smtp_username', '') }}" 
+                                       placeholder="your-email@example.com">
+                                <small class="form-text text-muted">Usually your email address</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="smtp_password" class="form-label">SMTP Password</label>
+                                <input type="password" class="form-control" id="smtp_password" name="smtp_password" 
+                                       placeholder="Leave blank to keep existing password">
+                                <small class="form-text text-muted">App password for Gmail, or your email password</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="smtp_from_email" class="form-label">From Email Address *</label>
+                                <input type="email" class="form-control" id="smtp_from_email" name="smtp_from_email" 
+                                       value="{{ settings.get('smtp_from_email', '') }}" 
+                                       placeholder="noreply@example.com" required>
+                                <small class="form-text text-muted">Email address that will appear as sender</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="smtp_from_name" class="form-label">From Name</label>
+                                <input type="text" class="form-control" id="smtp_from_name" name="smtp_from_name" 
+                                       value="{{ settings.get('smtp_from_name', '') }}" 
+                                       placeholder="InfoGarden">
+                                <small class="form-text text-muted">Display name for the sender</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <button type="submit" class="btn btn-primary">Save SMTP Settings</button>
+                    </div>
+                </form>
+                
+                <hr>
+                
+                <h6>Test SMTP Configuration</h6>
+                <p class="text-muted">Test your SMTP settings by sending a test email. The test will use the current form values.</p>
+                <form id="smtp-test-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label for="test_email" class="form-label">Test Email Address *</label>
+                                <input type="email" class="form-control" id="test_email" name="test_email" 
+                                       placeholder="test@example.com" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">&nbsp;</label>
+                                <button type="submit" class="btn btn-info w-100" id="test-smtp-btn">
+                                    <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                                    Send Test Email
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Email Document Restrictions</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="email_domain_restriction_enabled" name="email_domain_restriction_enabled" 
+                                   {{ 'checked' if settings.get('email_domain_restriction_enabled', 'false') == 'true' else '' }}>
+                            <label class="form-check-label" for="email_domain_restriction_enabled">
+                                Restrict emailing documents to this domain
+                            </label>
+                            <small class="form-text text-muted d-block">When enabled, users can only email documents to addresses from the specified domain.</small>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email_domain_restriction" class="form-label">Allowed Email Domain</label>
+                        <input type="text" class="form-control" id="email_domain_restriction" name="email_domain_restriction" 
+                               value="{{ settings.get('email_domain_restriction', '') }}" 
+                               placeholder="example.com">
+                        <small class="form-text text-muted">Enter the domain (e.g., 503cm.com) without @ or http://</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Email Restrictions</button>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // SMTP Test Form Handler
+    document.getElementById('smtp-test-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const form = e.target;
+        const testBtn = document.getElementById('test-smtp-btn');
+        const spinner = testBtn.querySelector('.spinner-border');
+        const originalText = testBtn.innerHTML;
+        
+        // Disable button and show spinner
+        testBtn.disabled = true;
+        spinner.classList.remove('d-none');
+        testBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Testing...';
+        
+        // Collect form data from both forms
+        const formData = new FormData();
+        
+        // Add CSRF token
+        formData.append('csrf_token', form.querySelector('input[name="csrf_token"]').value);
+        
+        // Add test email
+        formData.append('test_email', document.getElementById('test_email').value);
+        
+        // Add SMTP settings from the settings form
+        formData.append('smtp_server', document.getElementById('smtp_server').value);
+        formData.append('smtp_port', document.getElementById('smtp_port').value);
+        formData.append('smtp_use_tls', document.getElementById('smtp_use_tls').checked ? 'on' : '');
+        formData.append('smtp_username', document.getElementById('smtp_username').value);
+        formData.append('smtp_password', document.getElementById('smtp_password').value);
+        formData.append('smtp_from_email', document.getElementById('smtp_from_email').value);
+        formData.append('smtp_from_name', document.getElementById('smtp_from_name').value);
+        
+        // Send test request
+        fetch('{{ url_for("core_auth.smtp_test") }}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Re-enable button
+            testBtn.disabled = false;
+            spinner.classList.add('d-none');
+            testBtn.innerHTML = originalText;
+            
+            // Show toast notification
+            if (data.success) {
+                showToast('success', 'SMTP Test Successful', data.message);
+            } else {
+                showToast('danger', 'SMTP Test Failed', data.message);
+            }
+        })
+        .catch(error => {
+            // Re-enable button
+            testBtn.disabled = false;
+            spinner.classList.add('d-none');
+            testBtn.innerHTML = originalText;
+            
+            // Show error toast
+            showToast('danger', 'Error', 'An error occurred while testing SMTP: ' + error.message);
+        });
+    });
+</script>
 {% endblock %}
 

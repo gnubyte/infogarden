@@ -106,7 +106,7 @@ def run_auto_migration(engine, session):
     try:
         # Import all models
         from app.core import models as core_models
-        from app.modules.docs.models import Document
+        from app.modules.docs.models import Document, DocumentFolder
         from app.modules.contacts.models import Contact
         from app.modules.passwords.models import PasswordEntry
         
@@ -118,6 +118,7 @@ def run_auto_migration(engine, session):
         migrate_table(engine, core_models.Setting)
         
         # Migrate module models
+        migrate_table(engine, DocumentFolder)
         migrate_table(engine, Document)
         migrate_table(engine, Contact)
         migrate_table(engine, PasswordEntry)

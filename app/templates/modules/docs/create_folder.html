@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "components/sidebar.html" import render_sidebar %}
+
+{% block title %}Create Folder - InfoGarden{% endblock %}
+
+{% block content %}
+<div class="content-with-sidebar">
+    {{ render_sidebar(doc_tree, passwords, contacts, 'doc', None) }}
+    <div class="main-content">
+        <h1>Create Folder</h1>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <form method="POST">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Folder Name *</label>
+                                <input type="text" class="form-control" id="name" name="name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="parent_id" class="form-label">Parent Folder</label>
+                                <select class="form-select" id="parent_id" name="parent_id">
+                                    <option value="None">None (Root)</option>
+                                    {% for folder in folders %}
+                                        <option value="{{ folder.id }}">{{ folder.get_path() }}</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="form-text text-muted">Select a parent folder to create a subfolder</small>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Create Folder</button>
+                            <a href="{{ url_for('docs.index') }}" class="btn btn-secondary">Cancel</a>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
