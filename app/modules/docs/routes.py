@@ -417,6 +417,7 @@ def export_word(doc_id):
 def upload_image():
     """Handle image upload for markdown editor"""
     from flask import current_app
+    from app.core.s3_utils import upload_file
     
     if 'image' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
@@ -432,14 +433,24 @@ def upload_image():
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
         filename = timestamp + filename
         
-        upload_folder = current_app.config['UPLOAD_FOLDER']
-        os.makedirs(upload_folder, exist_ok=True)
-        filepath = os.path.join(upload_folder, filename)
-        file.save(filepath)
+        # Determine content type
+        ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+        content_type_map = {
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'webp': 'image/webp'
+        }
+        content_type = content_type_map.get(ext, 'image/jpeg')
         
-        # Return URL for markdown
-        url = url_for('static', filename=f'uploads/{filename}')
-        return jsonify({'url': url}), 200
+        # Upload file (to S3 or local storage)
+        url = upload_file(file, filename, folder='uploads', content_type=content_type)
+        
+        if url:
+            return jsonify({'url': url}), 200
+        else:
+            return jsonify({'error': 'Failed to upload image'}), 500
     
     return jsonify({'error': 'Invalid file type'}), 400
 
@@ -792,16 +803,19 @@ def software_create():
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
         filename = timestamp + filename
         
-        software_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'software')
-        os.makedirs(software_folder, exist_ok=True)
-        filepath = os.path.join(software_folder, filename)
-        file.save(filepath)
+        # Upload file (to S3 or local storage)
+        from app.core.s3_utils import upload_file
+        file_path_or_url = upload_file(file, filename, folder='software')
+        
+        if not file_path_or_url:
+            flash('Failed to upload file', 'error')
+            return redirect(url_for('docs.software_index'))
         
         software = Software(
             org_id=org_id,
             title=title,
             note=note,
-            file_path=filepath,
+            file_path=file_path_or_url,  # Can be S3 URL or local path
             file_name=file.filename,
             file_size=file_size,
             link=link if link else None,
@@ -858,11 +872,8 @@ def software_edit(software_id):
                     return redirect(url_for('docs.software_edit', software_id=software_id))
                 
                 # Delete old file
-                if os.path.exists(software.file_path):
-                    try:
-                        os.remove(software.file_path)
-                    except Exception as e:
-                        print(f"Error deleting old file: {e}")
+                from app.core.s3_utils import delete_file as s3_delete_file
+                s3_delete_file(software.file_path)
                 
                 # Save new file
                 filename = secure_filename(file.filename)
@@ -870,16 +881,19 @@ def software_edit(software_id):
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
                 filename = timestamp + filename
                 
-                software_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'software')
-                os.makedirs(software_folder, exist_ok=True)
-                filepath = os.path.join(software_folder, filename)
-                file.save(filepath)
+                # Upload file (to S3 or local storage)
+                from app.core.s3_utils import upload_file
+                file_path_or_url = upload_file(file, filename, folder='software')
                 
-                software.file_path = filepath
-                software.file_name = file.filename
-                software.file_size = file_size
-                software.uploaded_by = current_user.id
-                software.last_uploaded = datetime.utcnow()
+                if file_path_or_url:
+                    software.file_path = file_path_or_url  # Can be S3 URL or local path
+                    software.file_name = file.filename
+                    software.file_size = file_size
+                    software.uploaded_by = current_user.id
+                    software.last_uploaded = datetime.utcnow()
+                else:
+                    flash('Failed to upload file', 'error')
+                    return redirect(url_for('docs.software_edit', software_id=software_id))
         
         db_session.commit()
         
@@ -910,12 +924,9 @@ def software_delete(software_id):
         flash('You do not have access to this software', 'error')
         return redirect(url_for('docs.software_index'))
     
-    # Delete file
-    if os.path.exists(software.file_path):
-        try:
-            os.remove(software.file_path)
-        except Exception as e:
-            print(f"Error deleting file: {e}")
+    # Delete file (from S3 or local storage)
+    from app.core.s3_utils import delete_file as s3_delete_file
+    s3_delete_file(software.file_path)
     
     db_session.delete(software)
     db_session.commit()
@@ -929,6 +940,9 @@ def software_delete(software_id):
 def software_download(software_id):
     """Download software and increment download count"""
     from flask import abort
+    from app.core.s3_utils import is_s3_url, download_file_from_s3, get_s3_key_from_url, file_exists
+    from io import BytesIO
+    
     software = Software.query.get(software_id)
     if not software:
         abort(404)
@@ -937,7 +951,7 @@ def software_download(software_id):
         flash('You do not have access to this software', 'error')
         return redirect(url_for('docs.software_index'))
     
-    if not os.path.exists(software.file_path):
+    if not file_exists(software.file_path):
         flash('File not found', 'error')
         return redirect(url_for('docs.software_index'))
     
@@ -947,11 +961,27 @@ def software_download(software_id):
     
     log_activity('view', 'software', software_id, {'action': 'download'})
     
-    return send_file(
-        software.file_path,
-        as_attachment=True,
-        download_name=software.file_name
-    )
+    # Handle S3 or local file
+    if is_s3_url(software.file_path):
+        # Download from S3
+        s3_key = get_s3_key_from_url(software.file_path)
+        if s3_key:
+            file_data = download_file_from_s3(s3_key)
+            if file_data:
+                return send_file(
+                    BytesIO(file_data),
+                    as_attachment=True,
+                    download_name=software.file_name
+                )
+        flash('Failed to retrieve file from S3', 'error')
+        return redirect(url_for('docs.software_index'))
+    else:
+        # Return local file
+        return send_file(
+            software.file_path,
+            as_attachment=True,
+            download_name=software.file_name
+        )
 
 @bp.route('/<int:doc_id>/email', methods=['POST'])
 @login_required
@@ -1143,13 +1173,16 @@ def upload_file(folder_id):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
     filename = timestamp + filename
     
-    documents_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'documents')
-    os.makedirs(documents_folder, exist_ok=True)
-    filepath = os.path.join(documents_folder, filename)
-    file.save(filepath)
-    
     # Get MIME type
     mime_type = get_mime_type(original_filename)
+    
+    # Upload file (to S3 or local storage)
+    from app.core.s3_utils import upload_file
+    file_path_or_url = upload_file(file, filename, folder='documents', content_type=mime_type)
+    
+    if not file_path_or_url:
+        flash('Failed to upload file', 'error')
+        return redirect(url_for('docs.folder_view', folder_id=folder_id))
     
     # Create DocumentFile record
     doc_file = DocumentFile(
@@ -1157,7 +1190,7 @@ def upload_file(folder_id):
         folder_id=folder_id,
         name=original_filename.rsplit('.', 1)[0] if '.' in original_filename else original_filename,
         original_filename=original_filename,
-        file_path=filepath,
+        file_path=file_path_or_url,  # Can be S3 URL or local path
         file_size=file_size,
         mime_type=mime_type,
         uploaded_by=current_user.id
@@ -1174,6 +1207,8 @@ def upload_file(folder_id):
 def preview_file(file_id):
     """Preview a document file"""
     from flask import current_app, abort, Response
+    from app.core.s3_utils import is_s3_url, download_file_from_s3, get_s3_key_from_url, file_exists
+    from io import BytesIO
     
     doc_file = DocumentFile.query.get(file_id)
     if not doc_file:
@@ -1183,7 +1218,7 @@ def preview_file(file_id):
         flash('You do not have access to this file', 'error')
         return redirect(url_for('docs.index'))
     
-    if not os.path.exists(doc_file.file_path):
+    if not file_exists(doc_file.file_path):
         flash('File not found', 'error')
         return redirect(url_for('docs.folder_view', folder_id=doc_file.folder_id))
     
@@ -1193,19 +1228,37 @@ def preview_file(file_id):
     
     log_activity('view', 'document_file', file_id)
     
-    # Return file for preview
-    return send_file(
-        doc_file.file_path,
-        mimetype=doc_file.mime_type,
-        as_attachment=False,
-        download_name=doc_file.original_filename
-    )
+    # Handle S3 or local file
+    if is_s3_url(doc_file.file_path):
+        # Download from S3
+        s3_key = get_s3_key_from_url(doc_file.file_path)
+        if s3_key:
+            file_data = download_file_from_s3(s3_key)
+            if file_data:
+                return send_file(
+                    BytesIO(file_data),
+                    mimetype=doc_file.mime_type,
+                    as_attachment=False,
+                    download_name=doc_file.original_filename
+                )
+        flash('Failed to retrieve file from S3', 'error')
+        return redirect(url_for('docs.folder_view', folder_id=doc_file.folder_id))
+    else:
+        # Return local file
+        return send_file(
+            doc_file.file_path,
+            mimetype=doc_file.mime_type,
+            as_attachment=False,
+            download_name=doc_file.original_filename
+        )
 
 @bp.route('/file/<int:file_id>/download')
 @login_required
 def download_file(file_id):
     """Download a document file"""
     from flask import current_app, abort
+    from app.core.s3_utils import is_s3_url, download_file_from_s3, get_s3_key_from_url, file_exists
+    from io import BytesIO
     
     doc_file = DocumentFile.query.get(file_id)
     if not doc_file:
@@ -1215,7 +1268,7 @@ def download_file(file_id):
         flash('You do not have access to this file', 'error')
         return redirect(url_for('docs.index'))
     
-    if not os.path.exists(doc_file.file_path):
+    if not file_exists(doc_file.file_path):
         flash('File not found', 'error')
         return redirect(url_for('docs.folder_view', folder_id=doc_file.folder_id))
     
@@ -1225,18 +1278,36 @@ def download_file(file_id):
     
     log_activity('view', 'document_file', file_id, {'action': 'download'})
     
-    return send_file(
-        doc_file.file_path,
-        mimetype=doc_file.mime_type,
-        as_attachment=True,
-        download_name=doc_file.original_filename
-    )
+    # Handle S3 or local file
+    if is_s3_url(doc_file.file_path):
+        # Download from S3
+        s3_key = get_s3_key_from_url(doc_file.file_path)
+        if s3_key:
+            file_data = download_file_from_s3(s3_key)
+            if file_data:
+                return send_file(
+                    BytesIO(file_data),
+                    mimetype=doc_file.mime_type,
+                    as_attachment=True,
+                    download_name=doc_file.original_filename
+                )
+        flash('Failed to retrieve file from S3', 'error')
+        return redirect(url_for('docs.folder_view', folder_id=doc_file.folder_id))
+    else:
+        # Return local file
+        return send_file(
+            doc_file.file_path,
+            mimetype=doc_file.mime_type,
+            as_attachment=True,
+            download_name=doc_file.original_filename
+        )
 
 @bp.route('/file/<int:file_id>/delete', methods=['POST'])
 @login_required
 def delete_file(file_id):
     """Delete a document file"""
     from flask import abort
+    from app.core.s3_utils import delete_file as s3_delete_file
     
     doc_file = DocumentFile.query.get(file_id)
     if not doc_file:
@@ -1248,12 +1319,8 @@ def delete_file(file_id):
     
     folder_id = doc_file.folder_id
     
-    # Delete physical file
-    if os.path.exists(doc_file.file_path):
-        try:
-            os.remove(doc_file.file_path)
-        except OSError:
-            pass  # Ignore errors deleting file
+    # Delete physical file (from S3 or local storage)
+    s3_delete_file(doc_file.file_path)
     
     db_session.delete(doc_file)
     db_session.commit()

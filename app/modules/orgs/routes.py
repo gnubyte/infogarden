@@ -144,32 +144,33 @@ def edit(org_id):
         if 'logo' in request.files:
             file = request.files['logo']
             if file and file.filename != '' and allowed_file(file.filename):
+                from app.core.s3_utils import upload_file, delete_file
+                
                 # Delete old logo if it exists
                 if org.logo_path:
-                    # Extract filename from URL path (e.g., /static/uploads/filename.jpg -> uploads/filename.jpg)
-                    if '/static/' in org.logo_path:
-                        relative_path = org.logo_path.split('/static/')[-1]
-                    else:
-                        relative_path = org.logo_path.lstrip('/')
-                    old_filepath = os.path.join(current_app.static_folder, relative_path)
-                    if os.path.exists(old_filepath):
-                        try:
-                            os.remove(old_filepath)
-                        except OSError:
-                            pass  # Ignore errors deleting old file
+                    delete_file(org.logo_path)
                 
                 # Generate unique filename
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
                 filename = secure_filename(file.filename)
                 filename = f'org_{org_id}_{timestamp}{filename}'
                 
-                upload_folder = current_app.config['UPLOAD_FOLDER']
-                os.makedirs(upload_folder, exist_ok=True)
-                filepath = os.path.join(upload_folder, filename)
-                file.save(filepath)
+                # Determine content type
+                ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+                content_type_map = {
+                    'jpg': 'image/jpeg',
+                    'jpeg': 'image/jpeg',
+                    'png': 'image/png',
+                    'gif': 'image/gif',
+                    'webp': 'image/webp'
+                }
+                content_type = content_type_map.get(ext, 'image/jpeg')
                 
-                # Store relative path for URL generation
-                org.logo_path = url_for('static', filename=f'uploads/{filename}')
+                # Upload file (to S3 or local storage)
+                logo_url = upload_file(file, filename, folder='uploads', content_type=content_type)
+                
+                if logo_url:
+                    org.logo_path = logo_url
         
         db_session.commit()
         

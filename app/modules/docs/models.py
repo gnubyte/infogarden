@@ -64,16 +64,16 @@ class Software(Base):
     note = Column(Text, nullable=True)
     file_path = Column(String(500), nullable=False)
     file_name = Column(String(255), nullable=False)
-    file_size = Column(Integer, nullable=False)  # Size in bytes
-    link = Column(String(500), nullable=True)  # Optional link to documentation
+    file_size = Column(Integer, nullable=False)
+    link = Column(String(500), nullable=True)
     uploaded_by = Column(Integer, ForeignKey('users.id'), nullable=False)
-    last_uploaded = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_uploaded = Column(DateTime, nullable=True)
     download_count = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     organization = relationship('Organization', back_populates='software')
-    uploader = relationship('User', foreign_keys=[uploaded_by])
+    uploader = relationship('User', foreign_keys=[uploaded_by], backref='uploaded_software')
 
 class DocumentFile(Base):
     __tablename__ = 'document_files'
@@ -82,31 +82,22 @@ class DocumentFile(Base):
     id = Column(Integer, primary_key=True)
     org_id = Column(Integer, ForeignKey('organizations.id'), nullable=False)
     folder_id = Column(Integer, ForeignKey('document_folders.id'), nullable=False)
-    name = Column(String(255), nullable=False)
+    name = Column(String(200), nullable=False)
     original_filename = Column(String(255), nullable=False)
     file_path = Column(String(500), nullable=False)
-    file_size = Column(Integer, nullable=False)  # Size in bytes
+    file_size = Column(Integer, nullable=False)
     mime_type = Column(String(100), nullable=False)
     uploaded_by = Column(Integer, ForeignKey('users.id'), nullable=False)
     download_count = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    organization = relationship('Organization')
+    organization = relationship('Organization', back_populates='document_files')
     folder = relationship('DocumentFolder', backref='files')
-    uploader = relationship('User', foreign_keys=[uploaded_by])
+    uploader = relationship('User', foreign_keys=[uploaded_by], backref='uploaded_document_files')
     
     def is_previewable(self):
         """Check if file can be previewed in browser"""
-        previewable_types = [
-            'application/pdf',
-            'application/rtf',
-            'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'image/jpeg',
-            'image/jpg',
-            'image/png',
-            'image/webp'
-        ]
-        return self.mime_type.lower() in previewable_types
+        previewable_types = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp']
+        return self.mime_type in previewable_types
 

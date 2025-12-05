@@ -78,3 +78,4 @@ def verify_recaptcha(token: str, secret_key: Optional[str] = None) -> Tuple[bool
         return False, f"Error verifying reCAPTCHA: {str(e)}"
     except Exception as e:
         return False, f"Unexpected error: {str(e)}"
+

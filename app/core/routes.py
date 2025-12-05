@@ -399,17 +399,34 @@ def settings():
             if recaptcha_secret:
                 settings_map['recaptcha_secret_key'] = recaptcha_secret
         
+        # Update S3 settings if present
+        if 's3_enabled' in request.form:
+            settings_map['s3_enabled'] = str(request.form.get('s3_enabled') == 'on').lower()
+        if 's3_access_key' in request.form:
+            settings_map['s3_access_key'] = request.form.get('s3_access_key', '').strip()
+        if 's3_secret_key' in request.form:
+            s3_secret = request.form.get('s3_secret_key', '').strip()
+            # Only update if a new value is provided (similar to SMTP password handling)
+            if s3_secret:
+                settings_map['s3_secret_key'] = s3_secret
+        if 's3_bucket' in request.form:
+            settings_map['s3_bucket'] = request.form.get('s3_bucket', '').strip()
+        if 's3_region' in request.form:
+            settings_map['s3_region'] = request.form.get('s3_region', 'us-east-1').strip()
+        if 's3_custom_domain' in request.form:
+            settings_map['s3_custom_domain'] = request.form.get('s3_custom_domain', '').strip()
+        
         # Store in settings table
         for key, value in settings_map.items():
-            # Skip secret key if it's empty (user wants to keep existing)
-            if key == 'recaptcha_secret_key' and not value:
+            # Skip secret keys if they're empty (user wants to keep existing)
+            if key in ['recaptcha_secret_key', 's3_secret_key'] and not value:
                 continue
             setting = models.Setting.query.filter_by(key=key).first()
             if setting:
                 setting.value = value
             else:
                 # Don't create secret key setting if it's empty
-                if key == 'recaptcha_secret_key' and not value:
+                if key in ['recaptcha_secret_key', 's3_secret_key'] and not value:
                     continue
                 setting = models.Setting(key=key, value=value)
                 db_session.add(setting)
@@ -435,6 +452,8 @@ def settings():
 @require_global_admin
 def upload_logo():
     """Upload branding logo"""
+    from app.core.s3_utils import upload_file, delete_file
+    
     if 'logo' not in request.files:
         flash('No file provided', 'error')
         return redirect(url_for('core_auth.settings'))
@@ -448,24 +467,28 @@ def upload_logo():
     if file and file.filename.lower().endswith(('.jpg', '.jpeg')):
         filename = secure_filename('brand_logo.jpg')
         
-        # Save to static/uploads directory
-        upload_folder = current_app.config['UPLOAD_FOLDER']
-        os.makedirs(upload_folder, exist_ok=True)
-        filepath = os.path.join(upload_folder, filename)
-        file.save(filepath)
+        # Delete old logo if it exists
+        old_logo_setting = models.Setting.query.filter_by(key='brand_logo').first()
+        if old_logo_setting and old_logo_setting.value:
+            delete_file(old_logo_setting.value)
         
-        # Store logo path in settings
-        logo_url = url_for('static', filename=f'uploads/{filename}')
-        setting = models.Setting.query.filter_by(key='brand_logo').first()
-        if setting:
-            setting.value = logo_url
+        # Upload file (to S3 or local storage)
+        logo_url = upload_file(file, filename, folder='uploads', content_type='image/jpeg')
+        
+        if logo_url:
+            # Store logo path in settings
+            setting = models.Setting.query.filter_by(key='brand_logo').first()
+            if setting:
+                setting.value = logo_url
+            else:
+                setting = models.Setting(key='brand_logo', value=logo_url)
+                db_session.add(setting)
+            
+            db_session.commit()
+            flash('Logo uploaded successfully', 'success')
+            log_activity('update', 'settings', None, {'action': 'logo_upload'})
         else:
-            setting = models.Setting(key='brand_logo', value=logo_url)
-            db_session.add(setting)
-        
-        db_session.commit()
-        flash('Logo uploaded successfully', 'success')
-        log_activity('update', 'settings', None, {'action': 'logo_upload'})
+            flash('Failed to upload logo', 'error')
     else:
         flash('Invalid file type. Please upload a JPEG image.', 'error')
     

@@ -31,9 +31,17 @@ def create_app():
     login_manager.login_message = 'Please log in to access this page.'
     csrf.init_app(app)
     
-    # Setup database session
+    # Setup database session with connection pool settings
     global db_session, db_engine
-    db_engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'], pool_pre_ping=True)
+    db_engine = create_engine(
+        app.config['SQLALCHEMY_DATABASE_URI'],
+        pool_pre_ping=True,
+        pool_size=10,  # Number of connections to maintain
+        max_overflow=20,  # Maximum number of connections beyond pool_size
+        pool_recycle=3600,  # Recycle connections after 1 hour
+        pool_timeout=30,  # Timeout for getting connection from pool
+        echo=False
+    )
     db_session = scoped_session(sessionmaker(bind=db_engine))
     
     # Import core models first

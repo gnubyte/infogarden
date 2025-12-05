@@ -295,6 +295,72 @@
                 </form>
             </div>
         </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>AWS S3 Storage Settings</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="s3_enabled" name="s3_enabled" 
+                                   {{ 'checked' if settings.get('s3_enabled', 'false') == 'true' else '' }}>
+                            <label class="form-check-label" for="s3_enabled">
+                                Enable AWS S3 Storage
+                            </label>
+                        </div>
+                        <small class="form-text text-muted">When enabled, all file uploads (logos, images, documents) will be stored in AWS S3 instead of local storage.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="s3_access_key" class="form-label">AWS Access Key ID</label>
+                        <input type="text" class="form-control" id="s3_access_key" name="s3_access_key" 
+                               value="{{ settings.get('s3_access_key', '') }}" 
+                               placeholder="AKIAIOSFODNN7EXAMPLE">
+                        <small class="form-text text-muted">Your AWS access key ID</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="s3_secret_key" class="form-label">AWS Secret Access Key</label>
+                        <input type="password" class="form-control" id="s3_secret_key" name="s3_secret_key" 
+                               placeholder="Leave blank to keep existing secret key">
+                        <small class="form-text text-muted">Your AWS secret access key. Leave blank to keep the existing key.{% if settings.get('s3_secret_key') %} <span class="text-success">(Currently configured)</span>{% endif %}</small>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="s3_bucket" class="form-label">S3 Bucket Name *</label>
+                                <input type="text" class="form-control" id="s3_bucket" name="s3_bucket" 
+                                       value="{{ settings.get('s3_bucket', '') }}" 
+                                       placeholder="my-bucket-name">
+                                <small class="form-text text-muted">Name of your S3 bucket</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="s3_region" class="form-label">AWS Region *</label>
+                                <input type="text" class="form-control" id="s3_region" name="s3_region" 
+                                       value="{{ settings.get('s3_region', 'us-east-1') }}" 
+                                       placeholder="us-east-1">
+                                <small class="form-text text-muted">AWS region where your bucket is located (e.g., us-east-1, eu-west-1)</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="s3_custom_domain" class="form-label">Custom Domain (Optional)</label>
+                        <input type="text" class="form-control" id="s3_custom_domain" name="s3_custom_domain" 
+                               value="{{ settings.get('s3_custom_domain', '') }}" 
+                               placeholder="https://cdn.example.com">
+                        <small class="form-text text-muted">Optional custom domain/CDN URL for serving files (e.g., CloudFront distribution). Leave empty to use default S3 URLs.</small>
+                    </div>
+                    <div class="alert alert-info">
+                        <strong>Note:</strong> S3 storage will only be active when enabled and all required fields (Access Key, Secret Key, Bucket, Region) are provided. 
+                        Make sure your AWS credentials have proper permissions to upload, read, and delete objects in the specified bucket.
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save S3 Settings</button>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
