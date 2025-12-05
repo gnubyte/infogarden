@@ -16,6 +16,9 @@ A comprehensive wiki and knowledge management system designed for IT Managed Ser
 - **Activity Logging**: 90-day audit trail with IP address tracking
 - **Database Backups**: Automatic weekly backups (configurable) with manual backup/restore capabilities
 - **Auto-Migrations**: Automatic schema migration on startup
+- **Google reCAPTCHA v2**: Optional reCAPTCHA protection for login page
+- **IP Whitelist**: Optional IP-based access control
+- **Recent Visits**: Quick access to recently viewed items
 
 ## Tech Stack
 
@@ -127,6 +130,8 @@ The system includes automatic migration detection and application on startup. It
 - XSS prevention (Jinja2 auto-escaping)
 - Activity logging with IP addresses
 - Role-based access control at route and template level
+- Google reCAPTCHA v2 support for login protection
+- IP whitelist for restricted access control
 
 ## Development
 

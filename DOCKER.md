@@ -237,6 +237,19 @@ docker build -t infogarden:v1.0.0 .
 docker build -t your-dockerhub-username/infogarden:v1.0.0 .
 ```
 
+### Build for Linux x86_64 (amd64) using buildx
+
+For cross-platform builds or to ensure compatibility with Linux servers:
+
+```bash
+# Build and tag for linux/amd64
+docker buildx build --platform linux/amd64 \
+  -t infogarden:latest \
+  -t infogarden:$(git rev-parse --short HEAD) \
+  -t infogarden:$(date +%Y%m%d) \
+  --load .
+```
+
 ### Push to Docker Hub
 
 1. **Login to Docker Hub:**
@@ -250,10 +263,19 @@ docker build -t your-dockerhub-username/infogarden:v1.0.0 .
    docker tag infogarden:latest your-dockerhub-username/infogarden:v1.0.0
    ```
 
-3. **Push the image:**
+3. **Push the image (single platform):**
    ```bash
    docker push your-dockerhub-username/infogarden:latest
    docker push your-dockerhub-username/infogarden:v1.0.0
+   ```
+
+4. **Build and push directly using buildx (recommended for linux/amd64):**
+   ```bash
+   docker buildx build --platform linux/amd64 \
+     -t your-dockerhub-username/infogarden:latest \
+     -t your-dockerhub-username/infogarden:$(git rev-parse --short HEAD) \
+     -t your-dockerhub-username/infogarden:$(date +%Y%m%d) \
+     --push .
    ```
 
 ### Pull and Run from Docker Hub
