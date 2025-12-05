@@ -1,4 +1,5 @@
 Wiki:
+ - drawIO integration
  - Template system for end to end QA for responsibilities for an IT service we're providing to an org. Maybe with some sort of charts and burn rate and numerical graphs that allow people to speculatively put in more users or units to measure costs around a service. I want to be able to create document templates/forms that fill out for "projects" or "responsibilities" and then have people basically have a template form that they can fill out with questions or text inputs like 
     * "What is the software patching strategy like?"
     * "Who to contact for security breaches"

@@ -5,7 +5,7 @@
 
 {% block content %}
 <div class="content-with-sidebar">
-    {{ render_sidebar(doc_tree, passwords, contacts, 'software', None) }}
+    {{ render_sidebar(doc_tree, passwords, contacts, 'software', None, locations) }}
     <div class="main-content">
         <h1>Software</h1>
         <p class="text-muted">Software such as company specific VPNs with instructions on how to use it, setup or install it can be uploaded here up to 2GB</p>
@@ -82,5 +82,7 @@
 </div>
 </div>
 {% endblock %}
+
+
 
 

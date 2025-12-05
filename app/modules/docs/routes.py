@@ -2,7 +2,7 @@ from flask import render_template, request, redirect, url_for, flash, send_file,
 from flask_login import login_required, current_user
 from io import BytesIO, SEEK_END
 from app.modules.docs import bp
-from app.modules.docs.models import Document, DocumentFolder, Software
+from app.modules.docs.models import Document, DocumentFolder, Software, DocumentFile
 from app.core import models
 from app.core.auth import require_org_access
 from app.core.activity_logger import log_activity
@@ -20,6 +20,27 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+ALLOWED_DOCUMENT_EXTENSIONS = {'pdf', 'rtf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'webp'}
+
+def allowed_document_file(filename):
+    """Check if file extension is allowed for document uploads"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_DOCUMENT_EXTENSIONS
+
+def get_mime_type(filename):
+    """Get MIME type from filename"""
+    ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+    mime_types = {
+        'pdf': 'application/pdf',
+        'rtf': 'application/rtf',
+        'doc': 'application/msword',
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'webp': 'image/webp'
+    }
+    return mime_types.get(ext, 'application/octet-stream')
 
 def html_to_markdown(html_content):
     """Convert HTML to Markdown (basic conversion)"""
@@ -120,14 +141,16 @@ def index():
     folders = DocumentFolder.query.filter_by(org_id=org_id).order_by(DocumentFolder.name).all()
     doc_tree = build_document_tree(documents, org_id)
     
-    # Get passwords and contacts for sidebar
+    # Get passwords, contacts, and locations for sidebar
     from app.modules.passwords.models import PasswordEntry
     from app.modules.contacts.models import Contact
+    from app.modules.locations.models import Location
     passwords = PasswordEntry.query.filter_by(org_id=org_id).order_by(PasswordEntry.title).all()
     contacts = Contact.query.filter_by(org_id=org_id).order_by(Contact.name).all()
+    locations = Location.query.filter_by(org_id=org_id).order_by(Location.name).limit(20).all()
     
     log_activity('view', 'document', None)
-    return render_template('modules/docs/list.html', documents=documents, folders=folders, doc_tree=doc_tree, passwords=passwords, contacts=contacts, current_folder=None, breadcrumb_path=[])
+    return render_template('modules/docs/list.html', documents=documents, folders=folders, doc_tree=doc_tree, passwords=passwords, contacts=contacts, locations=locations, current_folder=None, breadcrumb_path=[])
 
 @bp.route('/folder/<int:folder_id>')
 @login_required
@@ -168,14 +191,19 @@ def folder_view(folder_id):
         breadcrumb_path.insert(0, current)
         current = current.parent
     
-    # Get passwords and contacts for sidebar
+    # Get passwords, contacts, and locations for sidebar
     from app.modules.passwords.models import PasswordEntry
     from app.modules.contacts.models import Contact
+    from app.modules.locations.models import Location
     passwords = PasswordEntry.query.filter_by(org_id=org_id).order_by(PasswordEntry.title).all()
     contacts = Contact.query.filter_by(org_id=org_id).order_by(Contact.name).all()
+    locations = Location.query.filter_by(org_id=org_id).order_by(Location.name).limit(20).all()
+    
+    # Get files in this folder
+    folder_files = DocumentFile.query.filter_by(org_id=org_id, folder_id=folder_id).order_by(DocumentFile.name).all()
     
     log_activity('view', 'folder', folder_id)
-    return render_template('modules/docs/list.html', documents=documents, folders=subfolders, doc_tree=doc_tree, passwords=passwords, contacts=contacts, current_folder=folder, breadcrumb_path=breadcrumb_path)
+    return render_template('modules/docs/list.html', documents=documents, folders=subfolders, doc_tree=doc_tree, passwords=passwords, contacts=contacts, locations=locations, current_folder=folder, breadcrumb_path=breadcrumb_path, folder_files=folder_files)
 
 @bp.route('/create', methods=['GET', 'POST'])
 @login_required
@@ -257,30 +285,6 @@ def create():
     contacts = Contact.query.filter_by(org_id=org_id).order_by(Contact.name).all()
     
     return render_template('modules/docs/create.html', folders=folders, doc_tree=doc_tree, passwords=passwords, contacts=contacts, default_folder_id=default_folder_id)
-
-@bp.route('/<int:doc_id>')
-@login_required
-def view(doc_id):
-    """View document"""
-    from flask import abort
-    doc = Document.query.get(doc_id)
-    if not doc:
-        abort(404)
-    
-    if not current_user.can_access_org(doc.org_id):
-        flash('You do not have access to this document', 'error')
-        return redirect(url_for('docs.index'))
-    
-    # Get all documents, passwords, and contacts for sidebar
-    from app.modules.passwords.models import PasswordEntry
-    from app.modules.contacts.models import Contact
-    documents = Document.query.filter_by(org_id=doc.org_id).order_by(Document.title).all()
-    doc_tree = build_document_tree(documents, doc.org_id)
-    passwords = PasswordEntry.query.filter_by(org_id=doc.org_id).order_by(PasswordEntry.title).all()
-    contacts = Contact.query.filter_by(org_id=doc.org_id).order_by(Contact.name).all()
-    
-    log_activity('view', 'document', doc_id)
-    return render_template('modules/docs/view.html', doc=doc, doc_tree=doc_tree, passwords=passwords, contacts=contacts, current_page='doc', current_id=doc.id)
 
 @bp.route('/<int:doc_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -723,13 +727,15 @@ def software_index():
     # Get sidebar data
     from app.modules.passwords.models import PasswordEntry
     from app.modules.contacts.models import Contact
+    from app.modules.locations.models import Location
     documents = Document.query.filter_by(org_id=org_id).order_by(Document.title).all()
     doc_tree = build_document_tree(documents, org_id)
     passwords = PasswordEntry.query.filter_by(org_id=org_id).order_by(PasswordEntry.title).all()
     contacts = Contact.query.filter_by(org_id=org_id).order_by(Contact.name).all()
+    locations = Location.query.filter_by(org_id=org_id).order_by(Location.name).limit(20).all()
     
     log_activity('view', 'software', None)
-    return render_template('modules/docs/software_list.html', software_list=software_list, doc_tree=doc_tree, passwords=passwords, contacts=contacts)
+    return render_template('modules/docs/software_list.html', software_list=software_list, doc_tree=doc_tree, passwords=passwords, contacts=contacts, locations=locations)
 
 @bp.route('/software/create', methods=['GET', 'POST'])
 @login_required
@@ -1057,4 +1063,202 @@ Best regards,
     
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error sending email: {str(e)}'}), 500
+
+@bp.route('/<int:doc_id>')
+@login_required
+def view(doc_id):
+    """View document"""
+    from flask import abort
+    doc = Document.query.get(doc_id)
+    if not doc:
+        abort(404)
+    
+    if not current_user.can_access_org(doc.org_id):
+        flash('You do not have access to this document', 'error')
+        return redirect(url_for('docs.index'))
+    
+    # Get all documents, passwords, and contacts for sidebar
+    from app.modules.passwords.models import PasswordEntry
+    from app.modules.contacts.models import Contact
+    documents = Document.query.filter_by(org_id=doc.org_id).order_by(Document.title).all()
+    doc_tree = build_document_tree(documents, doc.org_id)
+    passwords = PasswordEntry.query.filter_by(org_id=doc.org_id).order_by(PasswordEntry.title).all()
+    contacts = Contact.query.filter_by(org_id=doc.org_id).order_by(Contact.name).all()
+    
+    log_activity('view', 'document', doc_id)
+    
+    # Track recent visit
+    from app.core.recent_visits import add_recent_visit
+    add_recent_visit('document', doc_id, doc.title, url_for('docs.view', doc_id=doc_id))
+    
+    return render_template('modules/docs/view.html', doc=doc, doc_tree=doc_tree, passwords=passwords, contacts=contacts, current_page='doc', current_id=doc.id)
+
+@bp.route('/folder/<int:folder_id>/upload', methods=['POST'])
+@login_required
+def upload_file(folder_id):
+    """Upload file to a document folder"""
+    from flask import current_app, abort
+    
+    org_id = session.get('current_org_id') or current_user.org_id
+    if not org_id:
+        flash('Please select an organization first', 'error')
+        return redirect(url_for('orgs.index'))
+    
+    if not current_user.can_access_org(org_id):
+        flash('You do not have access to this organization', 'error')
+        return redirect(url_for('orgs.index'))
+    
+    # Get the folder
+    folder = DocumentFolder.query.filter_by(id=folder_id, org_id=org_id).first()
+    if not folder:
+        abort(404)
+    
+    if 'file' not in request.files:
+        flash('No file provided', 'error')
+        return redirect(url_for('docs.folder_view', folder_id=folder_id))
+    
+    file = request.files['file']
+    if file.filename == '':
+        flash('No file selected', 'error')
+        return redirect(url_for('docs.folder_view', folder_id=folder_id))
+    
+    if not allowed_document_file(file.filename):
+        flash('File type not allowed. Allowed types: PDF, RTF, DOC, DOCX, JPG, JPEG, PNG, WEBP', 'error')
+        return redirect(url_for('docs.folder_view', folder_id=folder_id))
+    
+    # Check file size (2GB limit)
+    file.seek(0, SEEK_END)
+    file_size = file.tell()
+    file.seek(0)
+    
+    max_size = 2 * 1024 * 1024 * 1024  # 2GB
+    if file_size > max_size:
+        flash('File size exceeds 2GB limit', 'error')
+        return redirect(url_for('docs.folder_view', folder_id=folder_id))
+    
+    # Save file
+    original_filename = file.filename
+    filename = secure_filename(original_filename)
+    from datetime import datetime
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
+    filename = timestamp + filename
+    
+    documents_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'documents')
+    os.makedirs(documents_folder, exist_ok=True)
+    filepath = os.path.join(documents_folder, filename)
+    file.save(filepath)
+    
+    # Get MIME type
+    mime_type = get_mime_type(original_filename)
+    
+    # Create DocumentFile record
+    doc_file = DocumentFile(
+        org_id=org_id,
+        folder_id=folder_id,
+        name=original_filename.rsplit('.', 1)[0] if '.' in original_filename else original_filename,
+        original_filename=original_filename,
+        file_path=filepath,
+        file_size=file_size,
+        mime_type=mime_type,
+        uploaded_by=current_user.id
+    )
+    db_session.add(doc_file)
+    db_session.commit()
+    
+    log_activity('create', 'document_file', doc_file.id)
+    flash('File uploaded successfully', 'success')
+    return redirect(url_for('docs.folder_view', folder_id=folder_id))
+
+@bp.route('/file/<int:file_id>/preview')
+@login_required
+def preview_file(file_id):
+    """Preview a document file"""
+    from flask import current_app, abort, Response
+    
+    doc_file = DocumentFile.query.get(file_id)
+    if not doc_file:
+        abort(404)
+    
+    if not current_user.can_access_org(doc_file.org_id):
+        flash('You do not have access to this file', 'error')
+        return redirect(url_for('docs.index'))
+    
+    if not os.path.exists(doc_file.file_path):
+        flash('File not found', 'error')
+        return redirect(url_for('docs.folder_view', folder_id=doc_file.folder_id))
+    
+    # Increment download count
+    doc_file.download_count += 1
+    db_session.commit()
+    
+    log_activity('view', 'document_file', file_id)
+    
+    # Return file for preview
+    return send_file(
+        doc_file.file_path,
+        mimetype=doc_file.mime_type,
+        as_attachment=False,
+        download_name=doc_file.original_filename
+    )
+
+@bp.route('/file/<int:file_id>/download')
+@login_required
+def download_file(file_id):
+    """Download a document file"""
+    from flask import current_app, abort
+    
+    doc_file = DocumentFile.query.get(file_id)
+    if not doc_file:
+        abort(404)
+    
+    if not current_user.can_access_org(doc_file.org_id):
+        flash('You do not have access to this file', 'error')
+        return redirect(url_for('docs.index'))
+    
+    if not os.path.exists(doc_file.file_path):
+        flash('File not found', 'error')
+        return redirect(url_for('docs.folder_view', folder_id=doc_file.folder_id))
+    
+    # Increment download count
+    doc_file.download_count += 1
+    db_session.commit()
+    
+    log_activity('view', 'document_file', file_id, {'action': 'download'})
+    
+    return send_file(
+        doc_file.file_path,
+        mimetype=doc_file.mime_type,
+        as_attachment=True,
+        download_name=doc_file.original_filename
+    )
+
+@bp.route('/file/<int:file_id>/delete', methods=['POST'])
+@login_required
+def delete_file(file_id):
+    """Delete a document file"""
+    from flask import abort
+    
+    doc_file = DocumentFile.query.get(file_id)
+    if not doc_file:
+        abort(404)
+    
+    if not current_user.can_access_org(doc_file.org_id):
+        flash('You do not have access to this file', 'error')
+        return redirect(url_for('docs.index'))
+    
+    folder_id = doc_file.folder_id
+    
+    # Delete physical file
+    if os.path.exists(doc_file.file_path):
+        try:
+            os.remove(doc_file.file_path)
+        except OSError:
+            pass  # Ignore errors deleting file
+    
+    db_session.delete(doc_file)
+    db_session.commit()
+    
+    log_activity('delete', 'document_file', file_id)
+    flash('File deleted successfully', 'success')
+    return redirect(url_for('docs.folder_view', folder_id=folder_id))
 

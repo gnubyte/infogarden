@@ -21,6 +21,7 @@ def create_app():
     # Ensure directories exist
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'software'), exist_ok=True)
+    os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'documents'), exist_ok=True)
     os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'exports'), exist_ok=True)
     os.makedirs(app.config['BACKUP_FOLDER'], exist_ok=True)
     
@@ -39,9 +40,10 @@ def create_app():
     from app.core import models as core_models
     
     # Import module models to ensure all relationships can be resolved
-    from app.modules.docs.models import Document, DocumentFolder, Software
+    from app.modules.docs.models import Document, DocumentFolder, Software, DocumentFile
     from app.modules.contacts.models import Contact
     from app.modules.passwords.models import PasswordEntry
+    from app.modules.locations.models import Location
     
     # Run auto-migration on startup
     from app.core.migration import run_auto_migration
@@ -57,6 +59,10 @@ def create_app():
     # Register core blueprint
     from app.core.routes import bp as core_bp
     app.register_blueprint(core_bp)
+    
+    # Register IP whitelist middleware (must be after blueprints are registered)
+    from app.core.ip_whitelist import check_ip_whitelist
+    app.before_request(check_ip_whitelist)
     
     # Register user loader
     @login_manager.user_loader
@@ -93,7 +99,13 @@ def create_app():
             elif setting.key == 'brand_logo' and setting.value:
                 brand_logo = setting.value
         
-        return dict(current_org=org, brand_name=brand_name, brand_logo=brand_logo)
+        # Get recent visits
+        recent_visits = []
+        if current_user.is_authenticated:
+            from app.core.recent_visits import get_recent_visits
+            recent_visits = get_recent_visits()
+        
+        return dict(current_org=org, brand_name=brand_name, brand_logo=brand_logo, recent_visits=recent_visits)
     
     # Setup scheduled backups and export cleanup
     from app.core.backup import setup_backup_scheduler

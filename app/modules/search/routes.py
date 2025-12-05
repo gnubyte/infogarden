@@ -1,7 +1,7 @@
 from flask import jsonify, request, session
 from flask_login import login_required, current_user
 from app.modules.search import bp
-from app.modules.docs.models import Document, Software
+from app.modules.docs.models import Document, Software, DocumentFile
 from app.modules.contacts.models import Contact
 from app.modules.passwords.models import PasswordEntry
 from app.core.activity_logger import log_activity
@@ -89,6 +89,24 @@ def search():
             'title': sw.title,
             'url': f'/docs/software/{sw.id}/edit',
             'snippet': f"File: {sw.file_name}" + (f" - {sw.note[:50]}..." if sw.note and len(sw.note) > 50 else (f" - {sw.note}" if sw.note else ''))
+        })
+    
+    # Search document files (name and original filename)
+    document_files = DocumentFile.query.filter(
+        DocumentFile.org_id == org_id,
+        (DocumentFile.name.contains(query) | 
+         DocumentFile.original_filename.contains(query))
+    ).limit(5).all()
+    
+    for doc_file in document_files:
+        # Get folder path for context
+        folder_path = doc_file.folder.get_path() if doc_file.folder else 'Unknown'
+        results.append({
+            'type': 'file',
+            'id': doc_file.id,
+            'title': doc_file.name,
+            'url': f'/docs/folder/{doc_file.folder_id}',
+            'snippet': f"File: {doc_file.original_filename} - Folder: {folder_path}" + (f" ({doc_file.mime_type})" if doc_file.mime_type else '')
         })
     
     log_activity('view', 'search', None, {'query': query, 'result_count': len(results)})

@@ -74,9 +74,11 @@ class Organization(Base):
     # Relationships to module models
     documents = relationship('Document', back_populates='organization', cascade='all, delete-orphan')
     document_folders = relationship('DocumentFolder', back_populates='organization', cascade='all, delete-orphan')
+    document_files = relationship('DocumentFile', back_populates='organization', cascade='all, delete-orphan')
     contacts = relationship('Contact', back_populates='organization', cascade='all, delete-orphan')
     passwords = relationship('PasswordEntry', back_populates='organization', cascade='all, delete-orphan')
     software = relationship('Software', back_populates='organization', cascade='all, delete-orphan')
+    locations = relationship('Location', back_populates='organization', cascade='all, delete-orphan')
 
 class ActivityLog(Base):
     __tablename__ = 'activity_logs'

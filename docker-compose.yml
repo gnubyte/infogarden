@@ -21,7 +21,8 @@ services:
   web:
     build: .
     container_name: infogarden_web
-    command: python -m flask run --host=0.0.0.0 --port=5000
+    # Use gunicorn for production WSGI server (override with environment variable if needed)
+    command: ${GUNICORN_CMD:-gunicorn --config gunicorn_config.py wsgi:app}
     volumes:
       - .:/app
       - uploads_data:/app/app/static/uploads
@@ -47,6 +48,9 @@ services:
       BACKUP_HOUR: ${BACKUP_HOUR:-0}
       BACKUP_MINUTE: ${BACKUP_MINUTE:-0}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      # Gunicorn settings
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
       db:
         condition: service_healthy

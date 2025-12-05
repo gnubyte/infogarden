@@ -5,7 +5,7 @@
 
 {% block content %}
 <div class="content-with-sidebar">
-    {{ render_sidebar(doc_tree, passwords, contacts, 'contact', None) }}
+    {{ render_sidebar(doc_tree, passwords, contacts, 'contact', None, locations) }}
     <div class="main-content">
         <h1>Contacts</h1>
 
@@ -32,7 +32,7 @@
                     <tbody>
                         {% for contact in contacts %}
                         <tr>
-                            <td>{{ contact.name }}</td>
+                            <td><a href="{{ url_for('contacts.view', contact_id=contact.id) }}">{{ contact.name }}</a></td>
                             <td>{{ contact.role or '-' }}</td>
                             <td>{{ contact.email or '-' }}</td>
                             <td>{{ contact.phone or '-' }}</td>
@@ -44,6 +44,7 @@
                                 {% endif %}
                             </td>
                             <td>
+                                <a href="{{ url_for('contacts.view', contact_id=contact.id) }}" class="btn btn-sm btn-outline-primary">View</a>
                                 <a href="{{ url_for('contacts.edit', contact_id=contact.id) }}" class="btn btn-sm btn-primary">Edit</a>
                                 <form method="POST" action="{{ url_for('contacts.delete', contact_id=contact.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure?');">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

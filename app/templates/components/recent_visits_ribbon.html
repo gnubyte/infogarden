@@ -1,0 +1,54 @@
+{% if current_user.is_authenticated and recent_visits %}
+<div class="recent-visits-ribbon bg-light border-bottom" style="padding: 0.5rem 0; overflow-x: auto; white-space: nowrap;">
+    <div class="container-fluid">
+        <div class="d-flex align-items-center">
+            <span class="text-muted me-2" style="font-size: 0.875rem; font-weight: 600;">Recent:</span>
+            <div class="d-flex align-items-center gap-2" style="flex-wrap: nowrap;">
+                {% for visit in recent_visits %}
+                <div class="recent-visit-item d-inline-flex align-items-center bg-white border rounded px-2 py-1" style="font-size: 0.875rem; transition: all 0.2s;">
+                    {% if visit.type == 'document' %}
+                        <i class="bi bi-file-text text-primary me-1"></i>
+                    {% elif visit.type == 'contact' %}
+                        <i class="bi bi-person text-success me-1"></i>
+                    {% elif visit.type == 'org' %}
+                        <i class="bi bi-building text-info me-1"></i>
+                    {% elif visit.type == 'password' %}
+                        <i class="bi bi-key text-warning me-1"></i>
+                    {% else %}
+                        <i class="bi bi-file-earmark text-secondary me-1"></i>
+                    {% endif %}
+                    <a href="{{ visit.url }}" class="text-decoration-none text-dark me-1" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        {{ visit.name }}
+                    </a>
+                    <button type="button" class="btn-close btn-close-sm recent-visit-close" 
+                            data-visit-type="{{ visit.type }}" 
+                            data-visit-id="{{ visit.id }}"
+                            aria-label="Remove" 
+                            style="font-size: 0.65rem; opacity: 0.6; margin-left: 0.25rem;"></button>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+    .recent-visit-item:hover {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .recent-visit-close {
+        cursor: pointer;
+        pointer-events: auto;
+        position: relative;
+        z-index: 10;
+    }
+    .recent-visit-close:hover {
+        opacity: 1 !important;
+        background-color: #dc3545;
+        border-radius: 0.25rem;
+    }
+    .recent-visit-close::before {
+        pointer-events: none;
+    }
+</style>
+{% endif %}
+

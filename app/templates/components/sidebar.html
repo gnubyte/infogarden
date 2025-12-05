@@ -59,9 +59,8 @@
     {% endfor %}
 {% endmacro %}
 
-{% macro render_sidebar(doc_tree, passwords, contacts, current_page, current_id) %}
+{% macro render_sidebar(doc_tree, passwords, contacts, current_page, current_id, locations=None) %}
 <div class="sidebar">
-    {% if doc_tree %}
     <div class="sidebar-section">
         <div class="sidebar-section-title" style="display: flex; justify-content: space-between; align-items: center;">
             <span><i class="bi bi-file-text"></i> Documents</span>
@@ -81,11 +80,21 @@
                 </button>
             </div>
         </div>
+        {% if doc_tree %}
         <ul class="sidebar-tree drop-zone-root" id="docs-tree" data-folder-id="">
             {{ render_tree_node(doc_tree, 0, current_page, current_id) }}
         </ul>
+        {% else %}
+        <ul class="sidebar-tree">
+            <li class="sidebar-tree-item">
+                <a href="{{ url_for('docs.index') }}" class="sidebar-tree-link">
+                    <span class="sidebar-tree-icon">📄</span>
+                    Browse Documents
+                </a>
+            </li>
+        </ul>
+        {% endif %}
     </div>
-    {% endif %}
     
     <div class="sidebar-section">
         <div class="sidebar-section-title">
@@ -142,7 +151,7 @@
             {% if contacts and contacts|length > 0 %}
                 {% for contact in contacts[:20] %}
                 <li class="sidebar-tree-item">
-                    <a href="{{ url_for('contacts.index') }}" 
+                    <a href="{{ url_for('contacts.view', contact_id=contact.id) }}" 
                        class="sidebar-tree-link {{ 'active' if current_page == 'contact' and current_id == contact.id else '' }}">
                         <span class="sidebar-tree-icon">👤</span>
                         {{ contact.name }}
@@ -161,6 +170,39 @@
                     <span class="sidebar-tree-link text-muted">
                         <small>No contacts</small>
                     </span>
+                </li>
+            {% endif %}
+        </ul>
+    </div>
+    
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">
+            <i class="bi bi-geo-alt"></i> Locations
+        </div>
+        <ul class="sidebar-tree">
+            {% if locations and locations|length > 0 %}
+                {% for location in locations[:20] %}
+                <li class="sidebar-tree-item">
+                    <a href="{{ url_for('locations.index') }}" 
+                       class="sidebar-tree-link {{ 'active' if current_page == 'location' and current_id == location.id else '' }}">
+                        <span class="sidebar-tree-icon">📍</span>
+                        {{ location.name }}
+                    </a>
+                </li>
+                {% endfor %}
+                {% if locations|length > 20 %}
+                <li class="sidebar-tree-item">
+                    <a href="{{ url_for('locations.index') }}" class="sidebar-tree-link text-muted">
+                        <small>... and {{ locations|length - 20 }} more</small>
+                    </a>
+                </li>
+                {% endif %}
+            {% else %}
+                <li class="sidebar-tree-item">
+                    <a href="{{ url_for('locations.index') }}" class="sidebar-tree-link">
+                        <span class="sidebar-tree-icon">📍</span>
+                        Browse Locations
+                    </a>
                 </li>
             {% endif %}
         </ul>

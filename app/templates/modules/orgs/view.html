@@ -157,6 +157,43 @@
             </div>
         </div>
         {% endif %}
+        
+        {% if locations %}
+        <div class="card mt-3">
+            <div class="card-body">
+                <h5 class="card-title">Locations</h5>
+                <div class="list-group">
+                    {% for location in locations %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">{{ location.name }}</h6>
+                                {% if location.address or location.city or location.state or location.zip_code or location.country %}
+                                <div class="small text-muted">
+                                    {% if location.address %}
+                                    <div>{{ location.address }}</div>
+                                    {% endif %}
+                                    {% if location.city or location.state or location.zip_code %}
+                                    <div>
+                                        {% if location.city %}{{ location.city }}{% endif %}{% if location.city and location.state %}, {% endif %}{% if location.state %}{{ location.state }}{% endif %} {% if location.zip_code %}{{ location.zip_code }}{% endif %}
+                                    </div>
+                                    {% endif %}
+                                    {% if location.country %}
+                                    <div>{{ location.country }}</div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                                {% if location.notes %}
+                                <p class="mb-0 mt-2 small">{{ location.notes }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
     
     <div class="col-md-4">

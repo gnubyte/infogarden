@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% from "components/sidebar.html" import render_sidebar %}
+
+{% block title %}{{ contact.name }} - InfoGarden{% endblock %}
+
+{% block content %}
+<div class="content-with-sidebar">
+    {{ render_sidebar(doc_tree, passwords, contacts, 'contact', contact.id, locations) }}
+    <div class="main-content">
+        <h1>{{ contact.name }}</h1>
+
+        <div class="row mt-4">
+            <div class="col-md-8">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">Contact Information</h5>
+                        <div class="mb-3">
+                            <strong>Name:</strong> {{ contact.name }}
+                        </div>
+                        {% if contact.role %}
+                        <div class="mb-3">
+                            <strong>Role:</strong> {{ contact.role }}
+                        </div>
+                        {% endif %}
+                        {% if contact.email %}
+                        <div class="mb-3">
+                            <strong>Email:</strong> 
+                            <a href="mailto:{{ contact.email }}">{{ contact.email }}</a>
+                        </div>
+                        {% endif %}
+                        {% if contact.phone %}
+                        <div class="mb-3">
+                            <strong>Phone:</strong> 
+                            <a href="tel:{{ contact.phone }}">{{ contact.phone }}</a>
+                        </div>
+                        {% endif %}
+                        {% if contact.text_number %}
+                        <div class="mb-3">
+                            <strong>Text Number:</strong> 
+                            <a href="tel:{{ contact.text_number }}">{{ contact.text_number }}</a>
+                        </div>
+                        {% endif %}
+                        <div class="mb-3">
+                            <strong>Emergency Contact:</strong> 
+                            {% if contact.emergency_contact %}
+                            <span class="badge bg-danger">Yes</span>
+                            {% else %}
+                            <span class="badge bg-secondary">No</span>
+                            {% endif %}
+                        </div>
+                        {% if contact.notes %}
+                        <div class="mb-3">
+                            <strong>Notes:</strong>
+                            <p class="mt-2" style="white-space: pre-wrap;">{{ contact.notes }}</p>
+                        </div>
+                        {% endif %}
+                        {% if contact.created_at %}
+                        <div class="mb-3">
+                            <strong>Created:</strong> {{ contact.created_at.strftime('%Y-%m-%d %H:%M') if contact.created_at else '-' }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Actions</h5>
+                        <div class="d-grid gap-2">
+                            <a href="{{ url_for('contacts.edit', contact_id=contact.id) }}" class="btn btn-primary">Edit Contact</a>
+                            <a href="{{ url_for('contacts.index') }}" class="btn btn-secondary">Back to List</a>
+                            <form method="POST" action="{{ url_for('contacts.delete', contact_id=contact.id) }}" onsubmit="return confirm('Are you sure you want to delete this contact?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-danger w-100">Delete Contact</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

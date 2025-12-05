@@ -28,15 +28,17 @@ def index():
     
     contacts = query.order_by(Contact.name).all()
     
-    # Get documents and passwords for sidebar
+    # Get documents, passwords, and locations for sidebar
     from app.modules.docs.models import Document
     from app.modules.passwords.models import PasswordEntry
+    from app.modules.locations.models import Location
     documents = Document.query.filter_by(org_id=org_id).order_by(Document.title).all()
     doc_tree = build_document_tree(documents, org_id)
     passwords = PasswordEntry.query.filter_by(org_id=org_id).order_by(PasswordEntry.title).all()
+    locations = Location.query.filter_by(org_id=org_id).order_by(Location.name).limit(20).all()
     
     log_activity('view', 'contact', None)
-    return render_template('modules/contacts/list.html', contacts=contacts, emergency_only=emergency_only, doc_tree=doc_tree, passwords=passwords)
+    return render_template('modules/contacts/list.html', contacts=contacts, emergency_only=emergency_only, doc_tree=doc_tree, passwords=passwords, locations=locations)
 
 @bp.route('/create', methods=['GET', 'POST'])
 @login_required
@@ -67,9 +69,42 @@ def create():
         
         log_activity('create', 'contact', contact.id)
         flash('Contact created successfully', 'success')
-        return redirect(url_for('contacts.index'))
+        return redirect(url_for('contacts.view', contact_id=contact.id))
     
     return render_template('modules/contacts/create.html')
+
+@bp.route('/<int:contact_id>')
+@login_required
+def view(contact_id):
+    """View contact details"""
+    from flask import abort
+    contact = Contact.query.get(contact_id)
+    if not contact:
+        abort(404)
+    
+    if not current_user.can_access_org(contact.org_id):
+        flash('You do not have access to this contact', 'error')
+        return redirect(url_for('contacts.index'))
+    
+    org_id = contact.org_id
+    
+    # Get documents, passwords, contacts, and locations for sidebar
+    from app.modules.docs.models import Document
+    from app.modules.passwords.models import PasswordEntry
+    from app.modules.locations.models import Location
+    documents = Document.query.filter_by(org_id=org_id).order_by(Document.title).all()
+    doc_tree = build_document_tree(documents, org_id)
+    passwords = PasswordEntry.query.filter_by(org_id=org_id).order_by(PasswordEntry.title).all()
+    contacts = Contact.query.filter_by(org_id=org_id).order_by(Contact.name).limit(20).all()
+    locations = Location.query.filter_by(org_id=org_id).order_by(Location.name).limit(20).all()
+    
+    log_activity('view', 'contact', contact_id)
+    
+    # Track recent visit
+    from app.core.recent_visits import add_recent_visit
+    add_recent_visit('contact', contact_id, contact.name, url_for('contacts.view', contact_id=contact_id))
+    
+    return render_template('modules/contacts/view.html', contact=contact, doc_tree=doc_tree, passwords=passwords, contacts=contacts, locations=locations)
 
 @bp.route('/<int:contact_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -96,7 +131,11 @@ def edit(contact_id):
         
         log_activity('update', 'contact', contact_id)
         flash('Contact updated successfully', 'success')
-        return redirect(url_for('contacts.index'))
+        return redirect(url_for('contacts.view', contact_id=contact_id))
+    
+    # Track recent visit when viewing edit page
+    from app.core.recent_visits import add_recent_visit
+    add_recent_visit('contact', contact_id, contact.name, url_for('contacts.edit', contact_id=contact_id))
     
     return render_template('modules/contacts/edit.html', contact=contact)
 

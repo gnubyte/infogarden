@@ -4,8 +4,6 @@ SMTP utility functions for sending emails
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
 from email.utils import formataddr
 from typing import Optional, Dict, Tuple
 from app.core import models
@@ -95,8 +93,7 @@ def send_email(
     subject: str,
     body: str,
     body_html: Optional[str] = None,
-    settings: Optional[Dict[str, str]] = None,
-    attachments: Optional[list] = None
+    settings: Optional[Dict[str, str]] = None
 ) -> Tuple[bool, str]:
     """
     Send an email using SMTP settings
@@ -107,7 +104,6 @@ def send_email(
         body: Plain text email body
         body_html: Optional HTML email body
         settings: Optional dictionary of SMTP settings. If None, retrieves from database.
-        attachments: Optional list of tuples (filename, file_data, content_type) for attachments
     
     Returns:
         Tuple of (success: bool, message: str)
@@ -123,7 +119,7 @@ def send_email(
         use_tls = settings.get('smtp_use_tls', 'true').lower() == 'true'
         
         # Create message
-        msg = MIMEMultipart('mixed' if attachments else 'alternative')
+        msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
         msg['To'] = to_email
         
@@ -135,26 +131,10 @@ def send_email(
         else:
             msg['From'] = from_email
         
-        # Create alternative part for text/html
+        # Add body parts
+        msg.attach(MIMEText(body, 'plain'))
         if body_html:
-            alt_part = MIMEMultipart('alternative')
-            alt_part.attach(MIMEText(body, 'plain'))
-            alt_part.attach(MIMEText(body_html, 'html'))
-            msg.attach(alt_part)
-        else:
-            msg.attach(MIMEText(body, 'plain'))
-        
-        # Add attachments if provided
-        if attachments:
-            for filename, file_data, content_type in attachments:
-                part = MIMEBase('application', 'octet-stream')
-                part.set_payload(file_data)
-                encoders.encode_base64(part)
-                part.add_header(
-                    'Content-Disposition',
-                    f'attachment; filename= {filename}'
-                )
-                msg.attach(part)
+            msg.attach(MIMEText(body_html, 'html'))
         
         # Create SMTP connection
         server = smtplib.SMTP(settings['smtp_server'], port, timeout=10)

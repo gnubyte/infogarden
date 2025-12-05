@@ -261,6 +261,9 @@ def view(org_id):
         flash('You do not have access to this organization', 'error')
         return redirect(url_for('orgs.index'))
     
+    # Switch organization context when viewing details
+    session['current_org_id'] = org_id
+    
     # Load all contacts for this org to display pinned contact details
     contacts = Contact.query.filter_by(org_id=org_id).all()
     # Create a dict for easy lookup
@@ -269,6 +272,10 @@ def view(org_id):
     # Count contacts and documents
     contact_count = Contact.query.filter_by(org_id=org_id).count()
     document_count = Document.query.filter_by(org_id=org_id).count()
+    
+    # Get locations for this org
+    from app.modules.locations.models import Location
+    locations = Location.query.filter_by(org_id=org_id).order_by(Location.name).all()
     
     # Get export job status if user is global admin
     export_job = None
@@ -284,7 +291,12 @@ def view(org_id):
             export_job = None
     
     log_activity('view', 'org', org_id)
-    return render_template('modules/orgs/view.html', org=org, contacts=contacts_dict, export_job=export_job, contact_count=contact_count, document_count=document_count)
+    
+    # Track recent visit
+    from app.core.recent_visits import add_recent_visit
+    add_recent_visit('org', org_id, org.name, url_for('orgs.view', org_id=org_id))
+    
+    return render_template('modules/orgs/view.html', org=org, contacts=contacts_dict, export_job=export_job, contact_count=contact_count, document_count=document_count, locations=locations)
 
 @bp.route('/search')
 @login_required

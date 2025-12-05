@@ -348,3 +348,4 @@ docker run -d --name infogarden_web -p 5000:5000 --env-file .env your-dockerhub-
 7. **Regular security updates** - Keep base images and dependencies updated
 8. **Backup strategy** - Test backup and restore procedures regularly
 
+

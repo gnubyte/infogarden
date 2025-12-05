@@ -117,6 +117,10 @@ def edit(entry_id):
         flash('Password entry updated successfully', 'success')
         return redirect(url_for('passwords.index'))
     
+    # Track recent visit when viewing edit page
+    from app.core.recent_visits import add_recent_visit
+    add_recent_visit('password', entry_id, entry.title, url_for('passwords.edit', entry_id=entry_id))
+    
     # Decrypt for display (but don't show in form by default for security)
     decrypted_password = decrypt_data(entry.encrypted_password) if entry.encrypted_password else None
     decrypted_2fa = decrypt_data(entry.encrypted_2fa_secret) if entry.encrypted_2fa_secret else None

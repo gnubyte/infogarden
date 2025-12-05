@@ -10,7 +10,7 @@ def load_modules(app, engine):
     modules_dir = os.path.dirname(__file__)
     
     # List of modules to load
-    modules = ['orgs', 'users', 'docs', 'contacts', 'passwords', 'search']
+    modules = ['orgs', 'users', 'docs', 'contacts', 'passwords', 'locations', 'search']
     
     for module_name in modules:
         module_path = os.path.join(modules_dir, module_name)

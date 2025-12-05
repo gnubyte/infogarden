@@ -34,7 +34,12 @@ EXPOSE 5000
 # - SECRET_KEY: Flask secret key (required)
 # - ENCRYPTION_KEY: Encryption key for password storage (required)
 # - FLASK_ENV: Flask environment (development/production)
+# - FLASK_PORT: Port for the web service (default: 5000)
+# - GUNICORN_WORKERS: Number of worker processes (default: CPU count * 2 + 1)
+# - LOG_LEVEL: Logging level (default: info)
 # - BACKUP_*: Backup configuration variables
 
-CMD ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=5000"]
+# Use gunicorn for production WSGI server
+# Create a WSGI entry point
+CMD ["gunicorn", "--config", "gunicorn_config.py", "wsgi:app"]
 

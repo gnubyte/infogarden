@@ -115,6 +115,41 @@
         
         <div class="card mt-4">
             <div class="card-header">
+                <h5>IP Whitelist</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="ip_whitelist_enabled" name="ip_whitelist_enabled" 
+                                   {{ 'checked' if settings.get('ip_whitelist_enabled', 'false') == 'true' else '' }}>
+                            <label class="form-check-label" for="ip_whitelist_enabled">
+                                Enable IP Whitelist
+                            </label>
+                        </div>
+                        <small class="form-text text-muted">When enabled, only IP addresses in the whitelist will be able to access the application.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ip_whitelist" class="form-label">Allowed IP Addresses</label>
+                        <textarea class="form-control" id="ip_whitelist" name="ip_whitelist" rows="5" 
+                                  placeholder="192.168.1.1&#10;10.0.0.0/8&#10;172.16.0.0/12">{{ settings.get('ip_whitelist', '') }}</textarea>
+                        <small class="form-text text-muted">
+                            Enter one IP address or CIDR range per line, or comma-separated on a single line.<br>
+                            Examples: <code>192.168.1.1</code>, <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code><br>
+                            {% if current_client_ip %}
+                            <strong>Your current IP:</strong> <code>{{ current_client_ip }}</code><br>
+                            {% endif %}
+                            <strong>Warning:</strong> If you enable this and your IP is not in the list, you will be locked out! Make sure to add your IP before enabling.
+                        </small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save IP Whitelist Settings</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
                 <h5>SMTP Settings</h5>
             </div>
             <div class="card-body">
@@ -224,29 +259,39 @@
         
         <div class="card mt-4">
             <div class="card-header">
-                <h5>Email Document Restrictions</h5>
+                <h5>Google reCAPTCHA v2 Settings</h5>
             </div>
             <div class="card-body">
                 <form method="POST">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="email_domain_restriction_enabled" name="email_domain_restriction_enabled" 
-                                   {{ 'checked' if settings.get('email_domain_restriction_enabled', 'false') == 'true' else '' }}>
-                            <label class="form-check-label" for="email_domain_restriction_enabled">
-                                Restrict emailing documents to this domain
+                            <input class="form-check-input" type="checkbox" id="recaptcha_enabled" name="recaptcha_enabled" 
+                                   {{ 'checked' if settings.get('recaptcha_enabled', 'false') == 'true' else '' }}>
+                            <label class="form-check-label" for="recaptcha_enabled">
+                                Enable Google reCAPTCHA v2
                             </label>
-                            <small class="form-text text-muted d-block">When enabled, users can only email documents to addresses from the specified domain.</small>
                         </div>
+                        <small class="form-text text-muted">When enabled, users will need to complete reCAPTCHA verification on the login page.</small>
                     </div>
                     <div class="mb-3">
-                        <label for="email_domain_restriction" class="form-label">Allowed Email Domain</label>
-                        <input type="text" class="form-control" id="email_domain_restriction" name="email_domain_restriction" 
-                               value="{{ settings.get('email_domain_restriction', '') }}" 
-                               placeholder="example.com">
-                        <small class="form-text text-muted">Enter the domain (e.g., 503cm.com) without @ or http://</small>
+                        <label for="recaptcha_site_key" class="form-label">reCAPTCHA Site Key</label>
+                        <input type="text" class="form-control" id="recaptcha_site_key" name="recaptcha_site_key" 
+                               value="{{ settings.get('recaptcha_site_key', '') }}" 
+                               placeholder="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI">
+                        <small class="form-text text-muted">Your reCAPTCHA v2 site key from Google. Get your keys from <a href="https://www.google.com/recaptcha/admin" target="_blank">Google reCAPTCHA Admin</a>.</small>
                     </div>
-                    <button type="submit" class="btn btn-primary">Save Email Restrictions</button>
+                    <div class="mb-3">
+                        <label for="recaptcha_secret_key" class="form-label">reCAPTCHA Secret Key</label>
+                        <input type="password" class="form-control" id="recaptcha_secret_key" name="recaptcha_secret_key" 
+                               placeholder="Leave blank to keep existing secret key">
+                        <small class="form-text text-muted">Your reCAPTCHA v2 secret key from Google. Leave blank to keep the existing key.{% if settings.get('recaptcha_secret_key') %} <span class="text-success">(Currently configured)</span>{% endif %}</small>
+                    </div>
+                    <div class="alert alert-info">
+                        <strong>Note:</strong> reCAPTCHA will only be active when both keys are provided and the feature is enabled. 
+                        Make sure to use reCAPTCHA v2 keys (not v3).
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save reCAPTCHA Settings</button>
                 </form>
             </div>
         </div>

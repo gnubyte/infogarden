@@ -6,6 +6,8 @@ from app.core.auth import require_global_admin
 from app.core.activity_logger import log_activity
 from app.core.backup import create_backup, restore_backup
 from app.core.smtp_utils import get_smtp_settings, test_smtp_connection, send_test_email, send_email
+from app.core.recent_visits import remove_recent_visit
+from app.core.recaptcha_utils import get_recaptcha_settings, verify_recaptcha
 from app import db_session
 from werkzeug.utils import secure_filename
 import os
@@ -102,7 +104,46 @@ def login():
                     brand_logo = setting.value
             # Check if SMTP is configured
             smtp_configured = get_smtp_settings() is not None
-            return render_template('login.html', brand_name=brand_name, brand_logo=brand_logo, smtp_configured=smtp_configured)
+            # Get reCAPTCHA settings
+            recaptcha_settings = get_recaptcha_settings()
+            return render_template('login.html', brand_name=brand_name, brand_logo=brand_logo, 
+                                 smtp_configured=smtp_configured, recaptcha_settings=recaptcha_settings)
+        
+        # Verify reCAPTCHA if enabled
+        recaptcha_settings = get_recaptcha_settings()
+        if recaptcha_settings:
+            recaptcha_token = request.form.get('g-recaptcha-response')
+            if not recaptcha_token:
+                flash('Please complete the reCAPTCHA verification', 'error')
+                # Get branding for template
+                brand_name = 'InfoGarden'
+                brand_logo = None
+                for setting in models.Setting.query.filter(models.Setting.key.in_(['brand_name', 'brand_logo'])).all():
+                    if setting.key == 'brand_name' and setting.value:
+                        brand_name = setting.value
+                    elif setting.key == 'brand_logo' and setting.value:
+                        brand_logo = setting.value
+                # Check if SMTP is configured
+                smtp_configured = get_smtp_settings() is not None
+                return render_template('login.html', brand_name=brand_name, brand_logo=brand_logo, 
+                                     smtp_configured=smtp_configured, recaptcha_settings=recaptcha_settings)
+            
+            # Verify the token
+            success, message = verify_recaptcha(recaptcha_token)
+            if not success:
+                flash(f'reCAPTCHA verification failed: {message}', 'error')
+                # Get branding for template
+                brand_name = 'InfoGarden'
+                brand_logo = None
+                for setting in models.Setting.query.filter(models.Setting.key.in_(['brand_name', 'brand_logo'])).all():
+                    if setting.key == 'brand_name' and setting.value:
+                        brand_name = setting.value
+                    elif setting.key == 'brand_logo' and setting.value:
+                        brand_logo = setting.value
+                # Check if SMTP is configured
+                smtp_configured = get_smtp_settings() is not None
+                return render_template('login.html', brand_name=brand_name, brand_logo=brand_logo, 
+                                     smtp_configured=smtp_configured, recaptcha_settings=recaptcha_settings)
         
         user = models.User.query.filter_by(username=username).first()
         
@@ -133,7 +174,11 @@ def login():
     # Check if SMTP is configured
     smtp_configured = get_smtp_settings() is not None
     
-    return render_template('login.html', brand_name=brand_name, brand_logo=brand_logo, smtp_configured=smtp_configured)
+    # Get reCAPTCHA settings
+    recaptcha_settings = get_recaptcha_settings()
+    
+    return render_template('login.html', brand_name=brand_name, brand_logo=brand_logo, 
+                         smtp_configured=smtp_configured, recaptcha_settings=recaptcha_settings)
 
 @bp.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
@@ -334,12 +379,38 @@ def settings():
         if 'email_domain_restriction' in request.form:
             settings_map['email_domain_restriction'] = request.form.get('email_domain_restriction', '').strip()
         
+        # Update IP whitelist settings if present
+        if 'ip_whitelist_enabled' in request.form:
+            settings_map['ip_whitelist_enabled'] = str(request.form.get('ip_whitelist_enabled') == 'on').lower()
+        if 'ip_whitelist' in request.form:
+            # Normalize newlines and strip whitespace
+            ip_whitelist_value = request.form.get('ip_whitelist', '').strip()
+            # Replace newlines with commas for storage, but keep both formats supported
+            settings_map['ip_whitelist'] = ip_whitelist_value
+        
+        # Update reCAPTCHA settings if present
+        if 'recaptcha_enabled' in request.form:
+            settings_map['recaptcha_enabled'] = str(request.form.get('recaptcha_enabled') == 'on').lower()
+        if 'recaptcha_site_key' in request.form:
+            settings_map['recaptcha_site_key'] = request.form.get('recaptcha_site_key', '').strip()
+        if 'recaptcha_secret_key' in request.form:
+            recaptcha_secret = request.form.get('recaptcha_secret_key', '').strip()
+            # Only update if a new value is provided (similar to SMTP password handling)
+            if recaptcha_secret:
+                settings_map['recaptcha_secret_key'] = recaptcha_secret
+        
         # Store in settings table
         for key, value in settings_map.items():
+            # Skip secret key if it's empty (user wants to keep existing)
+            if key == 'recaptcha_secret_key' and not value:
+                continue
             setting = models.Setting.query.filter_by(key=key).first()
             if setting:
                 setting.value = value
             else:
+                # Don't create secret key setting if it's empty
+                if key == 'recaptcha_secret_key' and not value:
+                    continue
                 setting = models.Setting(key=key, value=value)
                 db_session.add(setting)
         
@@ -353,7 +424,11 @@ def settings():
     for setting in models.Setting.query.all():
         settings_dict[setting.key] = setting.value
     
-    return render_template('settings.html', settings=settings_dict)
+    # Get current client IP for display in IP whitelist settings
+    from app.core.ip_whitelist import get_client_ip
+    current_client_ip = get_client_ip()
+    
+    return render_template('settings.html', settings=settings_dict, current_client_ip=current_client_ip)
 
 @bp.route('/settings/upload-logo', methods=['POST'])
 @login_required
@@ -585,4 +660,26 @@ def get_email_restriction_settings():
         'enabled': settings_dict.get('email_domain_restriction_enabled', 'false') == 'true',
         'domain': settings_dict.get('email_domain_restriction', '')
     })
+
+@bp.route('/recent-visits/remove', methods=['POST'])
+@login_required
+def remove_recent_visit_route():
+    """Remove a recent visit"""
+    from flask_wtf.csrf import CSRFProtect
+    from flask import current_app
+    
+    # CSRF is handled automatically by Flask-WTF for JSON requests via headers
+    resource_type = request.json.get('type')
+    resource_id = request.json.get('id')
+    
+    if not resource_type or resource_id is None:
+        return jsonify({'error': 'Type and ID required'}), 400
+    
+    try:
+        resource_id = int(resource_id)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid resource ID'}), 400
+    
+    remove_recent_visit(resource_type, resource_id)
+    return jsonify({'success': True})
 

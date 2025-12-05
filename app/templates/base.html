@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}InfoGarden{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
@@ -272,6 +273,9 @@
         </div>
     </nav>
 
+    <!-- Recent Visits Ribbon -->
+    {% include 'components/recent_visits_ribbon.html' %}
+
     <!-- Toast Container -->
     <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
         <div id="toast-container"></div>
@@ -421,6 +425,83 @@
                 }
             });
         }
+        
+        // Recent visits clear functionality
+        document.addEventListener('click', function(e) {
+            // Check if click is on or inside a recent visit close button
+            const closeButton = e.target.closest('.recent-visit-close');
+            if (closeButton && closeButton.hasAttribute('data-visit-type')) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const visitType = closeButton.getAttribute('data-visit-type');
+                const visitId = closeButton.getAttribute('data-visit-id');
+                const visitItem = closeButton.closest('.recent-visit-item');
+                
+                if (!visitType || !visitId) {
+                    console.error('Missing visit type or ID');
+                    return;
+                }
+                
+                // Get CSRF token from meta tag or hidden input
+                let csrfValue = '';
+                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                if (csrfMeta) {
+                    csrfValue = csrfMeta.getAttribute('content');
+                } else {
+                    const csrfToken = document.querySelector('input[name="csrf_token"]');
+                    if (csrfToken) {
+                        csrfValue = csrfToken.value;
+                    }
+                }
+                
+                fetch('{{ url_for("core_auth.remove_recent_visit_route") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfValue
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        type: visitType,
+                        id: parseInt(visitId)
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(data => {
+                            throw new Error(data.error || 'Network response was not ok');
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        // Remove the item from the DOM with fade animation
+                        if (visitItem) {
+                            visitItem.style.transition = 'opacity 0.3s, transform 0.3s';
+                            visitItem.style.opacity = '0';
+                            visitItem.style.transform = 'translateX(-10px)';
+                            setTimeout(() => {
+                                visitItem.remove();
+                                // If no items left, reload to hide the ribbon
+                                const ribbon = document.querySelector('.recent-visits-ribbon');
+                                if (ribbon && ribbon.querySelectorAll('.recent-visit-item').length === 0) {
+                                    window.location.reload();
+                                }
+                            }, 300);
+                        }
+                    } else {
+                        console.error('Failed to remove recent visit:', data.error);
+                        alert('Failed to remove item: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error removing recent visit:', error);
+                    alert('Error removing item: ' + error.message);
+                });
+            }
+        });
         
         // Toast notification function
         function showToast(type, title, message, duration = 5000) {
